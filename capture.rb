@@ -145,12 +145,12 @@ class Capture
     Process.detach(@pid)
     
     Thread.new do
-      while (line = oe.gets || line = oe.gets("\r"))
+      while (line = oe.gets("\r"))
         puts "****" + line
         (line =~ /time=([0-9]*\.[0-9]*)/) && (self.current_amount = $1.to_f)
         # puts '****' + $1
         # puts "******** #{self.current_amount} #{self.fraction_complete}"
-        yield self.fraction_complete
+        yield self.fraction_complete, self.time_remaining_s
       end
       puts "reached end of file"
       yield self.fraction_complete = 1

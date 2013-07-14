@@ -79,8 +79,9 @@ $stop_button.signal_connect("clicked") {
   not_recording
   $capture_window.stop_recording
   encoding
-  $capture_window.encode { |percent| 
+  $capture_window.encode { |percent, time_remaining| 
     $progress_bar.fraction = percent 
+    $progress_bar.text = time_remaining
     puts "Did progress #{percent.to_s}"
     percent < 1 || stop_encoding
   }

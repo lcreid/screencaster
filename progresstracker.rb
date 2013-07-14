@@ -3,15 +3,15 @@ module ProgressTracker
   attr_writer :start_time, :total_amount
   
   def percent_complete
-    fraction_complete * 100
+    self.fraction_complete * 100
   end
   
   def fraction_complete
-    current_amount.to_f / total_amount.to_f
+    self.current_amount.to_f / self.total_amount.to_f
   end
     
   def fraction_complete=(fraction)
-    @current_amount = fraction * total_amount
+    @current_amount = fraction * self.total_amount
   end
 
   def current_amount
@@ -21,7 +21,7 @@ module ProgressTracker
   def current_amount=(amt)
     @start_time || @start_time = Time.new
 
-    puts "Setting current_amount #{amt}"
+    # puts "Setting current_amount #{amt}"
     @current_amount = amt
   end
   
@@ -30,11 +30,15 @@ module ProgressTracker
   end
   
   def time_remaining
-    (Time.new - @start_time) / fraction_complete
+    (Time.new - @start_time) * (1 - self.fraction_complete) / self.fraction_complete
   end
   
-  def time_remaining_s(s = "%s remaining")
-    sprintf(s, time_remaining)
+  def time_remaining_s(format = "%d:%02d:%02d remaining")
+    t = self.time_remaining
+    h = (t / 3600).to_i
+    m = ((t - h * 3600) / 60).to_i
+    s = (t % 60).to_i
+    sprintf(format, h, m, s)
   end
   
 end
