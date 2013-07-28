@@ -1,4 +1,5 @@
 require 'open3'
+require 'logger'
 require './progresstracker'
 
 class Capture
@@ -8,7 +9,7 @@ class Capture
   attr :pid
   
   TMP_FILE = "/tmp/screencaster_#{$$}.mkv"
-
+  
   def width
     @right - @left
   end
@@ -46,10 +47,10 @@ class Capture
     info =~ /Height:\s+([[:digit:]]+)/
     @height = $1.to_i
     
-    print "Before xprop: Capturing #{@left.to_s},#{@top.to_s} to #{(@left+@width).to_s},#{(@top+@height).to_s}. Dimensions #{@width.to_s},#{@height.to_s}.\n"
+    $logger.debug "Before xprop: Capturing #{@left.to_s},#{@top.to_s} to #{(@left+@width).to_s},#{(@top+@height).to_s}. Dimensions #{@width.to_s},#{@height.to_s}.\n"
     
     # Use xprop on the window to figure out decorations? Maybe...
-    # puts "Window ID: #{window_id}"
+    # $logger.debug "Window ID: #{window_id}"
     # info = `xprop -id #{window_id}`
     # info =~ /_NET_FRAME_EXTENTS\(CARDINAL\) = ([[:digit:]]+), ([[:digit:]]+), ([[:digit:]]+), ([[:digit:]]+)/
     # border_left = $1.to_i
@@ -57,7 +58,7 @@ class Capture
     # border_top = $3.to_i
     # border_bottom = $4.to_i
     # 
-    # print "Borders: #{border_left.to_s},#{border_top.to_s},#{border_right.to_s},#{border_bottom.to_s}.\n"
+    # $logger.debug "Borders: #{border_left.to_s},#{border_top.to_s},#{border_right.to_s},#{border_bottom.to_s}.\n"
     # 
     # top += border_top
     # left += border_left
@@ -67,7 +68,7 @@ class Capture
     @height +=  @height % 2
     @width += @width % 2
 
-    print "Capturing #{@left},#{@top} to #{@left+@width},#{@top+@height}. Dimensions #{@width},#{@height}.\n"
+    $logger.debug "Capturing #{@left},#{@top} to #{@left+@width},#{@top+@height}. Dimensions #{@width},#{@height}.\n"
   end
   
   def record
@@ -77,7 +78,7 @@ class Capture
     # And i should probably popen here, save the pid, then fork and start
     # reading the input, updating the number of frames saved, or the time
     # recorded.
-    print "Capturing...\n"
+    $logger.debug "Capturing...\n"
     # @pid = Process.spawn("avconv \
         # #{audio_options} \
         # -f x11grab \
@@ -108,7 +109,7 @@ class Capture
     
     Thread.new do
       while line = oe.gets("\r")
-        puts "****" + line
+        $logger.debug "****" + line
         (line =~ /time=([0-9]*\.[0-9]*)/) && (self.total_amount = $1.to_f)
       end
     end
@@ -118,7 +119,7 @@ class Capture
     Process.kill("INT", @pid)
   end
 
-  def encode(output_file = "output")
+  def encode(output_file = "output.mp4")
     encode_fps=24
     video_encoding_options="-vcodec libx264 -pre:v ultrafast"
 
@@ -127,7 +128,7 @@ class Capture
     # I think I want to popen here, save the pid, then fork and start
     # updating progress based on what I read, which the main body
     # returns and carries on.
-    print "Encoding...\n"
+    $logger.debug "Encoding...\n"
     
     cmd_line = "avconv \
         -i #{TMP_FILE} \
@@ -136,9 +137,9 @@ class Capture
         -s #{@width}x#{@height} \
         -threads 0 \
         -y \
-        #{output_file}"
+        '#{output_file}'"
       
-    puts cmd_line
+    $logger.debug cmd_line
     
     i, oe, t = Open3.popen2e(cmd_line)
     @pid = t.pid
@@ -146,14 +147,14 @@ class Capture
     
     Thread.new do
       while (line = oe.gets("\r"))
-        puts "****" + line
+        $logger.debug "****" + line
         (line =~ /time=([0-9]*\.[0-9]*)/) && (self.current_amount = $1.to_f)
-        # puts '****' + $1
-        # puts "******** #{self.current_amount} #{self.fraction_complete}"
+        # $logger.debug '****' + $1
+        # $logger.debug "******** #{self.current_amount} #{self.fraction_complete}"
         yield self.fraction_complete, self.time_remaining_s
       end
-      puts "reached end of file"
-      yield self.fraction_complete = 1
+      $logger.debug "reached end of file"
+      yield self.fraction_complete = 1, self.time_remaining_s
     end
   end 
   

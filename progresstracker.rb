@@ -33,7 +33,7 @@ module ProgressTracker
     (Time.new - @start_time) * (1 - self.fraction_complete) / self.fraction_complete
   end
   
-  def time_remaining_s(format = "%d:%02d:%02d remaining")
+  def time_remaining_s(format = "%dh %02dm %02ds remaining")
     t = self.time_remaining
     h = (t / 3600).to_i
     m = ((t - h * 3600) / 60).to_i
