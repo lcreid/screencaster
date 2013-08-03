@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Encoding=UTF-8
+Name=Screencaster
+Comment=Record on-screen video and sound from microphone
+Exec=/usr/bin/screencaster
+Icon=application.png
+Terminal=false
+Categories=AudioVideo;

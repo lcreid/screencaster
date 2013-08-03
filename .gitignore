@@ -5,3 +5,8 @@ screencaster
 *.mpg
 *.flv
 *~
+debian/*
+!debian/DEBIAN
+osx/
+*.deb
+*.gz

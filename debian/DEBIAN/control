@@ -1,0 +1,10 @@
+Package: screencaster-gtk
+Priority: optional
+Section: video
+Installed-Size: 
+Maintainer: Larry Reid <lcreid@jadesystems.ca>
+Architecture: all
+Version: 1.0-1
+Depends: libav-tools (>=0.8.6), libavcodec-extra-53, wmctrl
+Description: Record screencasts
+

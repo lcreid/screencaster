@@ -1,3 +1,5 @@
+#!/usr/bin/env ruby
+
 module ProgressTracker
   attr_reader :start_time
   attr_writer :start_time, :total_amount
