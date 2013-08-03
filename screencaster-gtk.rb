@@ -90,48 +90,136 @@ class SaveFile
   end
 end
 
+class ScreencasterGTK
+  attr_reader :capture_window
+  
+  def initialize
+    @status_icon = Gtk::StatusIcon.new
+    @status_icon.stock = Gtk::Stock::MEDIA_RECORD
+    @status_icon.tooltip = 'Screencaster'
+
+    ###**************************###
+    ## Pop up menu on right click
+    ###**************************###
+    ##Build a menu
+    @select = Gtk::ImageMenuItem.new("Select Window")
+    @select.signal_connect('activate'){self.select}
+
+    @record = Gtk::ImageMenuItem.new(Gtk::Stock::MEDIA_RECORD)
+    @record.signal_connect('activate'){self.record}
+    @pause = Gtk::ImageMenuItem.new(Gtk::Stock::MEDIA_PAUSE)
+    @pause.signal_connect('activate'){self.pause}
+    @stop = Gtk::ImageMenuItem.new(Gtk::Stock::MEDIA_STOP)
+    @stop.signal_connect('activate'){self.stop_recording}
+
+    quit = Gtk::ImageMenuItem.new(Gtk::Stock::QUIT)
+    quit.signal_connect('activate'){self.quit}
+
+    @menu = Gtk::Menu.new
+    @menu.append(@select)
+    
+    @menu.append(Gtk::SeparatorMenuItem.new)
+    @menu.append(@record)
+    @menu.append(@pause)
+    @menu.append(@stop)
+    
+    @menu.append(Gtk::SeparatorMenuItem.new)
+    @menu.append(quit)
+    
+    @menu.show_all
+    ##Show menu on right click
+    @status_icon.signal_connect('popup-menu'){|tray, button, time| @menu.popup(nil, nil, button, time)}
+  end
+  
+  def quit
+    $logger.debug "Quitting"
+    Gtk.main_quit 
+  end
+  
+  def select
+    $logger.debug "Selecting Window"
+    @capture_window = Capture.new
+    @capture_window.get_window_to_capture
+    $record_button.sensitive = true
+  end
+  
+  def record
+    $logger.debug "Recording"
+    recording
+    @capture_window.record
+  end
+  
+  def pause
+    $logger.debug "Pause not implemented"
+    not_recording
+  end
+  
+  def stop_recording
+    $logger.debug "Stopped"
+    not_recording
+    @capture_window.stop_recording
+    
+    SaveFile.get_file_to_save { |filename|
+      encoding
+      @capture_window.encode(filename) { |percent, time_remaining| 
+        $progress_bar.fraction = percent 
+        $progress_bar.text = time_remaining
+        $logger.debug "Did progress #{percent.to_s} time remaining: #{time_remaining}"
+        percent < 1 || stop_encoding
+      }
+      $logger.debug "Back from encode"
+    }
+  end
+  
+  def stop_encoding
+    $logger.debug "Cancelled encoding"
+    not_recording
+    @capture_window.stop_encoding
+  end
+  
+  def recording
+    @select.sensitive = $select_button.sensitive = false
+    @pause.sensitive = $pause_button.sensitive = true
+    @stop.sensitive = $stop_button.sensitive = true
+    @record.sensitive = $record_button.sensitive = false
+    $cancel_button.sensitive = false
+  end
+  
+  def not_recording
+    @select.sensitive = $select_button.sensitive = true
+    @pause.sensitive = $pause_button.sensitive = false
+    @stop.sensitive = $stop_button.sensitive = false
+    @record.sensitive = $record_button.sensitive = ! @capture_window.nil?
+    $cancel_button.sensitive = false
+  end
+  
+  def encoding
+    @pause.sensitive = $pause_button.sensitive = false
+    @stop.sensitive = $stop_button.sensitive = false
+    @record.sensitive = $record_button.sensitive = false
+    $cancel_button.sensitive = true
+  end
+  
+  def not_encoding
+    not_recording
+  end
+end
+
+app = ScreencasterGTK.new
+
 DEFAULT_SPACE = 10
-
-def recording
-  $pause_button.sensitive = true
-  $stop_button.sensitive = true
-  $record_button.sensitive = false
-  $cancel_button.sensitive = false
-end
-
-def not_recording
-  $pause_button.sensitive = false
-  $stop_button.sensitive = false
-  $record_button.sensitive = true
-  $cancel_button.sensitive = false
-end
-
-def encoding
-  $pause_button.sensitive = false
-  $stop_button.sensitive = false
-  $record_button.sensitive = false
-  $cancel_button.sensitive = true
-end
-
-def not_encoding
-  not_recording
-end
 
 bottom_columns = Gtk::HBox.new(false, DEFAULT_SPACE) # children have different sizes, spaced by DEFAULT_SPACE
 
-button = Gtk::Button.new("Select Window to Record")
-button.signal_connect("clicked") {
-  $logger.debug "Selecting Window"
-  $capture_window = Capture.new
-  $capture_window.get_window_to_capture
-  $record_button.sensitive = true
+$select_button = Gtk::Button.new("Select Window to Record")
+$select_button.signal_connect("clicked") {
+  app.select
 }
-bottom_columns.pack_start(button, true, false)
+bottom_columns.pack_start($select_button, true, false)
 
 button = Gtk::Button.new("Quit")
 button.signal_connect("clicked") {
-  $logger.debug "Quitting"
-  Gtk.main_quit
+  app.quit
 }
 bottom_columns.pack_end(button, true, false)
 
@@ -143,37 +231,21 @@ control_columns = Gtk::HBox.new(false, DEFAULT_SPACE) # children have different 
 $record_button = Gtk::Button.new("Record")
 $record_button.sensitive = false
 $record_button.signal_connect("clicked") {
-  $logger.debug "Recording"
-  recording
-  $capture_window.record
+  app.record
 }
 control_columns.pack_start($record_button, true, false)
 
 $pause_button = Gtk::Button.new("Pause")
 $pause_button.sensitive = false
 $pause_button.signal_connect("clicked") {
-  $logger.debug "Paused"
-  not_recording
+  app.pause
 }
 control_columns.pack_start($pause_button, true, false)
 
 $stop_button = Gtk::Button.new("Stop")
 $stop_button.sensitive = false
 $stop_button.signal_connect("clicked") {
-  $logger.debug "Stopped"
-  not_recording
-  $capture_window.stop_recording
-  
-  SaveFile.get_file_to_save { |filename|
-    encoding
-    $capture_window.encode(filename) { |percent, time_remaining| 
-      $progress_bar.fraction = percent 
-      $progress_bar.text = time_remaining
-      $logger.debug "Did progress #{percent.to_s} time remaining: #{time_remaining}"
-      percent < 1 || stop_encoding
-    }
-    $logger.debug "Back from encode"
-  }
+  app.stop_recording
 }
 control_columns.pack_start($stop_button, true, false)
 
@@ -187,9 +259,7 @@ columns.pack_start($progress_bar, true, false)
 $cancel_button = Gtk::Button.new("Cancel")
 $cancel_button.sensitive = false
 $cancel_button.signal_connect("clicked") {
-  $logger.debug "Cancelled"
-  not_recording
-  $capture_window.stop_encoding
+  app.stop_encoding
 }
 columns.pack_start($cancel_button, true, false)
 
@@ -210,7 +280,7 @@ $window.signal_connect("delete_event") {
 
 $window.signal_connect("destroy") {
   $logger.debug "destroy event occurred"
-  Gtk.main_quit
+  app.quit
 }
 
 $window.border_width = DEFAULT_SPACE
@@ -221,4 +291,3 @@ $window.show_all
 Gtk.main
 
 $logger.info "Finished"
-
