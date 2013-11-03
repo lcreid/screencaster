@@ -6,6 +6,7 @@ docdir=$(datarootdir)/doc
 mandir=$(datarootdir)/man
 man1dir=$(mandir)/man1
 sysconfdir=${DESTDIR}/etc
+tmpdir=${DESTDIR}/tmp
 TARGET_OS?=$(shell "uname")
 
 .SECONDEXPANSION:
@@ -16,41 +17,69 @@ MAN1FILES=${EXECUTABLES:%=%.1}
 INSTALLED_EXECUTABLES=${EXECUTABLES:%=${bindir}/%}
 INSTALLED_MANPAGES=${MAN1FILES:%=${man1dir}/%.gz}
 
-SOURCES=*.rb *.1 makefile
+GEM_SRC_DIR=lib
+GEM_SRC_FILES=${GEM_SRC_DIR}/*.rb bin/screencaster.rb
+SOURCES=${GEM_SRC_FILES} *.1 makefile
+
+iconrootdir=${datarootdir}/icons/Mint-X/apps/scalable
+# ICON_BITMAPS=${iconrootdir}/48/screencaster.png \
+# ${iconrootdir}/32/screencaster.png \
+# ${iconrootdir}/24/screencaster.png \
+# ${iconrootdir}/22/screencaster.png \
+# ${iconrootdir}/16/screencaster.png
+
+INSTALLED_CONFIG_FILES+=${iconrootdir}/screencaster.svg
 
 ifeq (Darwin, ${TARGET_OS})
-	LOGROTATE_DIR=${sysconfdir}/newsyslog.d
-	INSTALLED_CONFIG_FILES+=${LOGROTATE_DIR}/screencaster-newsyslog.conf
+#	LOGROTATE_DIR=${sysconfdir}/newsyslog.d
+#	INSTALLED_CONFIG_FILES+=${LOGROTATE_DIR}/screencaster-newsyslog.conf
 else ifeq (Linux, ${TARGET_OS})
-	LOGROTATE_DIR=${sysconfdir}/logrotate.d
-	INSTALLED_CONFIG_FILES+=${LOGROTATE_DIR}/screencaster-logrotate.conf
+#	LOGROTATE_DIR=${sysconfdir}/logrotate.d
+#	INSTALLED_CONFIG_FILES+=${LOGROTATE_DIR}/screencaster-logrotate.conf
 	MENU_DIR=${datarootdir}/applications
-	INSTALLED_MENU_FILES=${MENU_DIR}/screencaster.desktop
 else
 	$(error "Operating system " ${TARGET_OS} " not supported."
 endif
 
+INSTALLED_MENU_FILE=${MENU_DIR}/screencaster.desktop
+INSTALLED_GEM_FILE=${tmpdir}/screencaster-gtk.gemspec
+
 all: ${EXECUTABLES}
 
-screencaster: \
-progresstracker.rb \
-capture.rb \
-screencaster-gtk.rb
-	cat $+ >$@
+screencaster: ${GEM_SRC_FILES}
+	cp bin/screencaster.rb $@
 	chmod a+x $@
 
+screencaster-gtk.gemspec: ${GEM_SRC_FILES} 
+	#-rm screencaster-gtk-*.gem
+	gem build screencaster-gtk.gemspec
+
+install_gem: gem
+	# gem install -l ${tmpdir}/screencaster-gtk
+
 install: installdirs \
-${INSTALLED_EXECUTABLES} \
+${INSTALLED_GEM_FILE} \
 ${INSTALLED_MANPAGES} \
-${INSTALLED_MENU_FILES}
+${INSTALLED_CONFIG_FILES} \
+${INSTALLED_MENU_FILE} \
+${ICON_BITMAPS}
 
 uninstall: 
-	-rm ${INSTALLED_EXECUTABLES} ${INSTALLED_MANPAGES} ${INSTALLED_MENU_FILES}
+	-rm ${INSTALLED_MANPAGES} \
+		${INSTALLED_CONFIG_FILES} \
+		${INSTALLED_MENU_FILE} \
+		${ICON_BITMAPS}
+	gem uninstall screencaster-gtk
 
 ${INSTALLED_EXECUTABLES} \
 ${INSTALLED_MANPAGES} \
-${INSTALLED_MENU_FILES}: $$(@F)
+${INSTALLED_CONFIG_FILES} \
+${INSTALLED_GEM_FILE}: $$(@F)
 	cp $? $@
+
+${INSTALLED_MENU_FILE}: $${@F}
+	cp $? $@
+	chmod a+x $@
 
 ############
 #
@@ -58,7 +87,10 @@ ${INSTALLED_MENU_FILES}: $$(@F)
 #
 ############
 
-debian: screencaster.deb
+debian: perms screencaster.deb
+
+perms:
+	chmod a+x debian/DEBIAN/postinst debian/DEBIAN/prerm
 
 screencaster.deb: ${SOURCES} debian/DEBIAN/* 
 	make DESTDIR=debian install
@@ -102,12 +134,29 @@ installdirs: ${bindir} \
 ${man1dir} \
 ${docdir} \
 ${LOGROTATE_DIR} \
-${MENU_DIR}
+${MENU_DIR} \
+${iconrootdir}
 
-${bindir} ${INIT_DIR} ${man1dir} ${docdir} ${LOGROTATE_DIR} ${MENU_DIR}:
+${bindir} ${INIT_DIR} ${man1dir} ${docdir} ${LOGROTATE_DIR} ${MENU_DIR} ${iconrootdir}:
 	mkdir -p $@ 
 
-% : %.rb
-	cp $< $@
-	chmod a+x $@
+# % : %.rb
+	# cp $< $@
+	# chmod a+x $@
+
+${iconrootdir}/48/screencaster.png: screencaster.svg
+	rsvg-convert -w 48 -h 48 $? -o $@
+
+${iconrootdir}/32/screencaster.png: screencaster.svg
+	rsvg-convert -w 32 -h 32 $? -o $@
+
+${iconrootdir}/24/screencaster.png: screencaster.svg
+	rsvg-convert -w 24 -h 24 $? -o $@
+
+${iconrootdir}/22/screencaster.png: screencaster.svg
+	rsvg-convert -w 22 -h 22 $? -o $@
+
+${iconrootdir}/16/screencaster.png: screencaster.svg
+	rsvg-convert -w 16 -h 16 $? -o $@
+
 

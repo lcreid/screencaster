@@ -1,15 +1,37 @@
 require 'open3'
 require 'logger'
-require './progresstracker'
+require "#{File.dirname(__FILE__)}/progresstracker"
 
 class Capture
   include ProgressTracker
   
   attr_writer :left, :top, :right, :bottom
+  attr_reader :state
   attr :pid
+  attr :tmp_files
   
-  TMP_FILE = "/tmp/screencaster_#{$$}.mkv"
+  def initialize
+    @tmp_files = []
+    @exit_chain = trap("EXIT") { self.cleanup; @exit_chain.call unless @exit_chain == "DEFAULT" }
+    state = :stopped
+  end
   
+  def current_tmp_file
+    @tmp_files.last
+  end
+  
+  def new_tmp_file
+    @tmp_files << self.tmp_file_name(@tmp_files.size)
+  end
+  
+  def tmp_file_name(index = nil)
+    "/tmp/screencaster_#{$$}" + (index.nil? ? "": "_#{"%04d" % index}") + ".mkv"
+  end
+  
+  def input_files
+    @tmp_files.inject {|a, b| "#{a} +#{b}" }
+  end
+    
   def width
     @right - @left
   end
@@ -72,8 +94,11 @@ class Capture
   end
   
   def record
+    @tmp_files = [] if @state != :paused
+    @state = :recording
     capture_fps=24
     audio_options="-f alsa -ac 1 -ab 192k -i pulse -acodec pcm_s16le"
+    self.new_tmp_file
     
     # And i should probably popen here, save the pid, then fork and start
     # reading the input, updating the number of frames saved, or the time
@@ -94,6 +119,7 @@ class Capture
     # writes with CR and not LF, so it's hard to read
     # with popen and 2>&1, an extra shell gets created that messed things up.
     # popen2e helps.
+    vcodec = 'huffyuv' # I used to use ffv1
     i, oe, t = Open3.popen2e("avconv \
         #{audio_options} \
         -f x11grab \
@@ -101,9 +127,9 @@ class Capture
         -r #{capture_fps} \
         -s #{@width}x#{@height} \
         -i :0.0+#{@left},#{@top} \
-        -qscale 0 -vcodec ffv1 \
+        -qscale 0 -vcodec #{vcodec} \
         -y \
-        #{TMP_FILE}")
+        #{self.current_tmp_file}")
     @pid = t.pid
     Process.detach(@pid)
     
@@ -117,9 +143,16 @@ class Capture
   
   def stop_recording
     Process.kill("INT", @pid)
+    @state = :stopped
+  end
+
+  def pause_recording
+    Process.kill("INT", @pid)
+    @state = :paused
   end
 
   def encode(output_file = "output.mp4")
+    state = :encoding
     encode_fps=24
     video_encoding_options="-vcodec libx264 -pre:v ultrafast"
 
@@ -128,10 +161,15 @@ class Capture
     # I think I want to popen here, save the pid, then fork and start
     # updating progress based on what I read, which the main body
     # returns and carries on.
-    $logger.debug "Encoding...\n"
+    $logger.debug "Encoding #{self.input_files}...\n"
+    
+    cmd_line = "mkvmerge -o #{self.tmp_file_name} #{self.input_files}"
+    $logger.debug cmd_line
+    $logger.debug(`#{cmd_line}`)
+    $logger.debug "mkvmerge return value #{$?}"
     
     cmd_line = "avconv \
-        -i #{TMP_FILE} \
+        -i #{tmp_file_name} \
         #{video_encoding_options} \
         -r #{encode_fps} \
         -s #{@width}x#{@height} \
@@ -154,6 +192,7 @@ class Capture
         yield self.fraction_complete, self.time_remaining_s
       end
       $logger.debug "reached end of file"
+      @state = :stopped
       yield self.fraction_complete = 1, self.time_remaining_s
     end
   end 
@@ -166,5 +205,8 @@ class Capture
     end
   end
 
+  def cleanup
+    @tmp_files.each { |f| File.delete(f) }
+  end
 end
 

@@ -4,7 +4,7 @@ Section: video
 Installed-Size: 
 Maintainer: Larry Reid <lcreid@jadesystems.ca>
 Architecture: all
-Version: 1.0-1
-Depends: libav-tools (>=0.8.6), libavcodec-extra-53, wmctrl
+Version: 1.0-2
+Depends: libav-tools (>=0.8.6), libavcodec-extra-53, wmctrl, ruby1.9.1 (>=1.9.1), mkvtoolnix (>=5.1.0)
 Description: Record screencasts
 
