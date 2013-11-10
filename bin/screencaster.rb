@@ -1,9 +1,9 @@
-#!/usr/bin/ruby
+#!/usr/bin/env ruby
 
 require 'getoptlong'
 require 'fileutils'
 require 'logger'
-require "#{File.dirname(__FILE__)}/lib/screencaster-gtk"
+require "screencaster-gtk"
 
 # Don't run the program if there's another instance running for the user.
 # If there's another instance running for the user and the --pause or --start 
@@ -41,7 +41,7 @@ opts.each do |opt, arg|
   case opt
     when '--help'
       puts <<-EOF
-screencaster-gtk [OPTION] ... 
+screencaster [OPTION] ... 
 
 -h, --help:
    show help

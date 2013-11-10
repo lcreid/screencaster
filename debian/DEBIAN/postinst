@@ -1,4 +1,3 @@
 #!/bin/sh
 
-echo "Installing gem from $PWD"
-gem install -l /tmp/screencaster-gtk*
+gem install /tmp/screencaster-gtk*

@@ -1,12 +1,7 @@
-#!/usr/bin/ruby
-#!/usr/bin/env ruby
-=begin
-=end
-
 require 'gtk2'
 require 'logger'
 require 'fileutils'
-require "#{File.dirname(__FILE__)}/screencaster-gtk/capture"
+require "screencaster-gtk/capture"
 
 ##########################
 

@@ -1,4 +1,4 @@
-require "./version"
+require_relative "version"
 require "rake/clean"
 
 # Some of these aren't needed by this file, but they're the GNU
@@ -57,13 +57,13 @@ CLOBBER.include(DEBIAN_FILES.collect { |f| File.join "debian", f })
 
 DEBIAN_FILES.each do |f|
   file f => File.basename(f) do |target|
-    cp target.prerequisites, target.name
+    cp target.prerequisites.first, target.name
   end
 end
 
-file "bin/screencaster" do |f|
+file "bin/screencaster" => FileList.new("bin/screencaster.rb") do |f|
   cp f.name + ".rb", f.name
-  File.chmod 775, f.name
+  File.chmod 0775, f.name
 end
 
 rule '.gz' do |r|

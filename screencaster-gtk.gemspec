@@ -3,12 +3,15 @@ require './version'
 Gem::Specification.new do |s|
   s.name        = 'screencaster-gtk'
   s.version     = ScreencasterGtk::VERSION
-  s.date        = '2013-08-08'
+  s.date        = Time.new.strftime("%Y-%m-%d")
   s.summary     = "Screencaster"
   s.description = "A gem for capturing screencasts"
   s.authors     = ["Larry Reid"]
   s.email       = 'larry.reid@jadesystems.ca'
-  s.files       = ["lib/screencaster-gtk.rb", "lib/screencaster-gtk/capture.rb", "lib/screencaster-gtk/progresstracker.rb"]
+  s.files       = [
+    "lib/screencaster-gtk.rb", 
+    "lib/screencaster-gtk/capture.rb", 
+    "lib/screencaster-gtk/progresstracker.rb"]
   s.homepage    =
     'http://github.org/lcreid/screencaster'
   s.license     = 'GPL2'

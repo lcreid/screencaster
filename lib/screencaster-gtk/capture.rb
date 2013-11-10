@@ -1,6 +1,6 @@
 require 'open3'
 require 'logger'
-require "#{File.dirname(__FILE__)}/progresstracker"
+require "lib/progresstracker"
 
 class Capture
   include ProgressTracker
