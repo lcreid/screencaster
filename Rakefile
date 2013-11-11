@@ -20,7 +20,8 @@ GEM = "screencaster-gtk-#{ScreencasterGtk::VERSION}.gem"
 DEBIAN_FILES = FileList.new(File.join(TMPDIR, GEM),
   File.join(MAN1DIR, "screencaster.1.gz"),
   File.join(DATAROOTDIR, "applications", "screencaster.desktop"),
-  File.join(DATAROOTDIR, "icons", "Mint-X", "apps", "scalable", "screencaster.svg"))
+#  File.join(DATAROOTDIR, "icons", "Mint-X", "apps", "scalable", "screencaster.svg"))
+  File.join(DATAROOTDIR, "pixmaps", "screencaster.svg"))
 
 desc "Create the gem."
 task :build => GEM
@@ -41,7 +42,7 @@ end
 desc "Build the .deb file"
 task :debian => "screencaster.deb"
 
-file "screencaster.deb" => FileList.new("debian/DEBIAN/*", DEBIAN_FILES.collect do |f| File.basename f end ) do |t|
+file "screencaster.deb" => FileList.new("debian/DEBIAN/*", GEM, DEBIAN_FILES.collect do |f| File.basename f end ) do |t|
   system "rake DESTDIR=debian install" 
   rm Dir.glob("debian/DEBIAN/*~")
   system "fakeroot dpkg-deb --build debian"

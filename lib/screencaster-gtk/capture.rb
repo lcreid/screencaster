@@ -1,6 +1,6 @@
 require 'open3'
 require 'logger'
-require "lib/progresstracker"
+require "screencaster-gtk/progresstracker"
 
 class Capture
   include ProgressTracker
@@ -142,12 +142,20 @@ class Capture
   end
   
   def stop_recording
-    Process.kill("INT", @pid)
+    begin
+      Process.kill("INT", @pid)
+    rescue SystemCallError
+      $logger.error("No recording to stop.") unless @state == :paused
+    end
     @state = :stopped
   end
 
   def pause_recording
-    Process.kill("INT", @pid)
+    begin
+      Process.kill("INT", @pid)
+    rescue SystemCallError
+      $logger.error("No recording to pause.")
+    end
     @state = :paused
   end
 
@@ -201,7 +209,7 @@ class Capture
     begin
       Process.kill("INT", @pid)
     rescue SystemCallError
-      # do nothing
+      $logger.error("No encoding to stop.")
     end
   end
 
