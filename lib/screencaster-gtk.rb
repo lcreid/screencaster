@@ -1,93 +1,26 @@
 require 'gtk2'
 require 'logger'
 require 'fileutils'
+require 'getoptlong'
 require "screencaster-gtk/capture"
+require "screencaster-gtk/savefile"
 
 ##########################
 
-class SaveFile
-  def self.set_up_dialog(file_name = "output.mp4")
-    @dialog = Gtk::FileChooserDialog.new(
-        "Save File As ...",
-        $window,
-        Gtk::FileChooser::ACTION_SAVE,
-        nil,
-        [ Gtk::Stock::CANCEL, Gtk::Dialog::RESPONSE_CANCEL ],
-        [ Gtk::Stock::SAVE, Gtk::Dialog::RESPONSE_ACCEPT ]
-    )
-    # dialog.signal_connect('response') do |w, r|
-      # odg = case r
-        # when Gtk::Dialog::RESPONSE_ACCEPT
-          # filename = dialog.filename
-          # "'ACCEPT' (#{r}) button pressed -- filename is {{ #{filename} }}"
-        # when Gtk::Dialog::RESPONSE_CANCEL;   "'CANCEL' (#{r}) button pressed"
-        # else; "Undefined response ID; perhaps Close-x? (#{r})"
-      # end
-      # puts odg
-      # dialog.destroy 
-    # end
-    @dialog.current_name = GLib.filename_to_utf8(file_name)
-    @dialog.current_folder = GLib.filename_to_utf8(Dir.getwd)
-    @dialog.do_overwrite_confirmation = true
-  end
-  
-  def self.get_file_to_save
-    @dialog || SaveFile.set_up_dialog
-    result = @dialog.run
-    file_name = @dialog.filename
-    case result
-      when Gtk::Dialog::RESPONSE_ACCEPT
-        @dialog.hide
-        yield file_name
-      when Gtk::Dialog::RESPONSE_CANCEL
-        self.confirm_cancel(@dialog)
-        @dialog.hide
-      else
-        LOGGER.error("Can't happen #{__FILE__} line: #{__LINE__}")
-        @dialog.hide
-    end
-  end
-  
-  def self.confirm_cancel(parent)
-    dialog = Gtk::Dialog.new(
-      "Confirm Cancel",
-      parent,
-      Gtk::Dialog::MODAL,
-      [ "Discard Recording", Gtk::Dialog::RESPONSE_CANCEL ],
-      [ "Save Recording As...", Gtk::Dialog::RESPONSE_OK ]
-    )
-    dialog.has_separator = false
-    label = Gtk::Label.new("Your recording has not been saved.")
-    image = Gtk::Image.new(Gtk::Stock::DIALOG_WARNING, Gtk::IconSize::DIALOG)
-  
-    hbox = Gtk::HBox.new(false, 5)
-    hbox.border_width = 10
-    hbox.pack_start_defaults(image);
-    hbox.pack_start_defaults(label);
-  
-    dialog.vbox.add(hbox)
-    dialog.show_all
-    result = dialog.run
-    dialog.destroy
-    
-    case result
-      when Gtk::Dialog::RESPONSE_OK
-        self.get_file_to_save
-      else
-    end
-  end
-end
 
 class ScreencasterGtk
   attr_reader :capture_window, :window
   attr_writer :status_icon
     
+  SCREENCASTER_DIR = File.join(Dir.home, ".screencaster")
   # Set up logging. Keep 5 log files of a 100K each
-  log_dir = File.expand_path('~/.screencaster/log/')
+  log_dir = File.join(SCREENCASTER_DIR, 'log')
   FileUtils.mkpath log_dir
   LOGGER = Logger.new(File.join(log_dir, 'screencaster.log'), 5, 100000)
   LOGGER.level = Logger::DEBUG
   
+  PIDFILE = File.join(SCREENCASTER_DIR, "run", "screencaster.pid")
+
   DEFAULT_SPACE = 10
 
   def initialize
@@ -326,6 +259,23 @@ class ScreencasterGtk
     end
   end
   
+  def toggle_recording
+    LOGGER.debug "Toggle recording"
+    return if @capture_window.nil?
+    case @capture_window.state
+    when :recording
+      pause
+    when :paused
+      record
+    when :encoding
+      stop_encoding
+    when :stopped
+      # Do nothing
+    else
+      LOGGER.error "#{__FILE__} #{__LINE__}: Can't happen."
+    end
+  end
+  
   def recording
     self.status_icon.stock = Gtk::Stock::MEDIA_STOP
     @select.sensitive = @select_button.sensitive = false
@@ -404,6 +354,104 @@ class ScreencasterGtk
     self.show_all_including_status
     Gtk.main
     LOGGER.info "Finished"
+  end
+  
+  def set_up
+    # Don't run the program if there's another instance running for the user.
+    # If there's another instance running for the user and the --pause or --start 
+    # flags are present, send the USR1 signal to the running instance
+    # and exit.
+    # If there's no other instance running for the user, and the --pause or --start 
+    # flags are not present, start normally.
+    
+    output_file = "/home/reid/test-key.log"
+    
+    ScreencasterGtk::LOGGER.debug("pid_file is #{PIDFILE}")
+    
+    if File.exists? PIDFILE
+      begin
+        f = File.new(PIDFILE)
+        ScreencasterGtk::LOGGER.debug("Opened PIDFILE")
+        existing_pid = f.gets
+        existing_pid = existing_pid.to_i
+        f.close
+        ScreencasterGtk::LOGGER.debug("existing_pid = #{existing_pid.to_s}")
+      rescue StandardError
+        LOGGER.error("File to read #{PIDFILE}")
+        exit 1
+      end
+    else
+      existing_pid = nil
+    end
+    
+    opts = GetoptLong.new(
+      [ '--help', '-h', GetoptLong::NO_ARGUMENT ],
+      [ '--pause', GetoptLong::NO_ARGUMENT ],
+      [ '--start', GetoptLong::NO_ARGUMENT ]
+    )
+    
+    opts.each do |opt, arg|
+      case opt
+        when '--help'
+          puts <<-EOF
+    screencaster [OPTION] ... 
+    
+    -h, --help:
+       show help
+    
+    -s, -p, --start, --pause:
+      Pause a running capture, or restart a paused capture
+          EOF
+          exit 0
+        when '--pause' || '--start'
+          if existing_pid then
+            ScreencasterGtk::LOGGER.debug("Got a pause for PID #{existing_pid}")
+            begin
+              Process.kill "USR1", existing_pid
+              exit 0
+            rescue SystemCallError
+              LOGGER.info("Got a pause but PID #{existing_pid} didn't exist")
+              exit 1
+            end
+          else
+            ScreencasterGtk::LOGGER.info("Got a pause but no PID")
+            exit 1
+          end 
+      end
+    end
+    
+    # TODO: Check for running process and if not, ignore PIDFILE.
+    (ScreencasterGtk::LOGGER.debug("Can't run two instances at once."); exit 1) if ! existing_pid.nil?
+    
+    @chain = Signal.trap("EXIT") { 
+      ScreencasterGtk::LOGGER.debug("Exiting")
+      ScreencasterGtk::LOGGER.debug("unlinking") if File.file?(PIDFILE)
+      File.unlink(PIDFILE) if File.file?(PIDFILE)
+      `gconftool-2 --unset /apps/metacity/keybinding_commands/screencaster_pause`
+      `gconftool-2 --unset /apps/metacity/global_keybindings/run_screencaster_pause`
+      @chain.call unless @chain == "DEFAULT"
+    }
+    
+    `gconftool-2 --set /apps/metacity/keybinding_commands/screencaster_pause --type string "screencaster --pause"`
+    `gconftool-2 --set /apps/metacity/global_keybindings/run_screencaster_pause --type string "<Control><Alt>S"`
+
+    begin
+      FileUtils.mkpath(File.dirname(PIDFILE))
+      f = File.new(PIDFILE, "w")
+      f.puts(Process.pid.to_s)
+      f.close
+      LOGGER.debug("Wrote PID #{Process.pid}")
+    rescue StandardError
+      LOGGER.error("Failed to write #{PIDFILE}")
+      exit 1
+    end
+    
+    Signal.trap("USR1") { 
+      ScreencasterGtk::LOGGER.debug("Pause/Resume") 
+      self.toggle_recording
+    }
+    
+    $logger = ScreencasterGtk::LOGGER # TODO: Fix logging
   end
 end
 

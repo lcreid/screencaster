@@ -53,7 +53,13 @@ end
 desc "Install the files, like a GNU makefile would install them."
 task :install => DEBIAN_FILES
 
-CLEAN.include("screencaster.deb", GEM, "bin/screencaster")
+CLEAN.include("screencaster.deb", 
+  GEM, 
+  "bin/screencaster", 
+  "test/c.mkv",
+  "test/test-final-encode.mp4",
+  "test/c-from-one.mkv",
+  "test/c-from-one.mkv")
 CLOBBER.include(DEBIAN_FILES.collect { |f| File.join "debian", f })
 
 DEBIAN_FILES.each do |f|
@@ -75,3 +81,15 @@ rule "" do |r|
   puts r.name
 end
 
+##################################
+
+# Testing
+
+require 'rake/testtask'
+
+Rake::TestTask.new do |t|
+  t.libs << 'test'
+end
+
+desc "Run tests"
+task :default => :test

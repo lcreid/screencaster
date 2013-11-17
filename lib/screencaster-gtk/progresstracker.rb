@@ -7,7 +7,7 @@ module ProgressTracker
   end
   
   def fraction_complete
-    self.current_amount.to_f / self.total_amount.to_f
+    [ self.current_amount.to_f / self.total_amount.to_f, 1.0 ].min
   end
     
   def fraction_complete=(fraction)

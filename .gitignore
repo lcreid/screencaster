@@ -10,3 +10,5 @@ debian/*
 osx/
 *.deb
 *.gz
+*.gem
+*.log

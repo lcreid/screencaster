@@ -10,8 +10,10 @@ Gem::Specification.new do |s|
   s.email       = 'larry.reid@jadesystems.ca'
   s.files       = [
     "lib/screencaster-gtk.rb", 
+    "lib/screencaster-gtk/savefile.rb", 
     "lib/screencaster-gtk/capture.rb", 
-    "lib/screencaster-gtk/progresstracker.rb"]
+    "lib/screencaster-gtk/progresstracker.rb"
+    ]
   s.homepage    =
     'http://github.org/lcreid/screencaster'
   s.license     = 'GPL2'

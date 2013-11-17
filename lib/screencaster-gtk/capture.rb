@@ -13,7 +13,8 @@ class Capture
   def initialize
     @tmp_files = []
     @exit_chain = trap("EXIT") { self.cleanup; @exit_chain.call unless @exit_chain == "DEFAULT" }
-    state = :stopped
+    $logger.debug "@exit_chain: #{@exit_chain.to_s}"
+    @state = :stopped
   end
   
   def current_tmp_file
@@ -21,15 +22,16 @@ class Capture
   end
   
   def new_tmp_file
-    @tmp_files << self.tmp_file_name(@tmp_files.size)
+    @tmp_files << Capture.tmp_file_name(@tmp_files.size)
+    self.current_tmp_file
   end
   
-  def tmp_file_name(index = nil)
+  def self.tmp_file_name(index = nil)
     "/tmp/screencaster_#{$$}" + (index.nil? ? "": "_#{"%04d" % index}") + ".mkv"
   end
   
-  def input_files
-    @tmp_files.inject {|a, b| "#{a} +#{b}" }
+  def self.format_input_files_for_mkvmerge(files)
+    files.drop(1).inject("\"#{files.first}\"") {|a, b| "#{a} + \"#{b}\"" }
   end
     
   def width
@@ -50,6 +52,10 @@ class Capture
     w
   end
   
+  # I have to refactor this to make it more testable. 
+  # As a general approach, I want to factor out the parts that have human input
+  # so that whatever I have to do for that is as small as possible.
+
   def get_window_to_capture
     print "Click in the window you want to capture.\n"
     info = `xwininfo`
@@ -94,11 +100,17 @@ class Capture
   end
   
   def record
-    @tmp_files = [] if @state != :paused
+    if @state != :paused
+      @tmp_files = [] 
+      self.total_amount = 0.0
+    end
+    record_one_file(self.new_tmp_file)
+  end
+  
+  def record_one_file(output_file)
     @state = :recording
     capture_fps=24
     audio_options="-f alsa -ac 1 -ab 192k -i pulse -acodec pcm_s16le"
-    self.new_tmp_file
     
     # And i should probably popen here, save the pid, then fork and start
     # reading the input, updating the number of frames saved, or the time
@@ -120,24 +132,31 @@ class Capture
     # with popen and 2>&1, an extra shell gets created that messed things up.
     # popen2e helps.
     vcodec = 'huffyuv' # I used to use ffv1
-    i, oe, t = Open3.popen2e("avconv \
-        #{audio_options} \
-        -f x11grab \
-        -show_region 1 \
-        -r #{capture_fps} \
-        -s #{@width}x#{@height} \
-        -i :0.0+#{@left},#{@top} \
-        -qscale 0 -vcodec #{vcodec} \
-        -y \
-        #{self.current_tmp_file}")
+    
+    cmd_line = "avconv \
+      #{audio_options} \
+      -f x11grab \
+      -show_region 1 \
+      -r #{capture_fps} \
+      -s #{@width}x#{@height} \
+      -i :0.0+#{@left},#{@top} \
+      -qscale 0 -vcodec #{vcodec} \
+      -y \
+      #{output_file}"
+    
+    $logger.debug cmd_line
+
+    i, oe, t = Open3.popen2e(cmd_line)
     @pid = t.pid
     Process.detach(@pid)
     
+    duration = 0.0
     Thread.new do
       while line = oe.gets("\r")
         $logger.debug "****" + line
-        (line =~ /time=([0-9]*\.[0-9]*)/) && (self.total_amount = $1.to_f)
+        (line =~ /time=([0-9]*\.[0-9]*)/) && (duration = $1.to_f)
       end
+      self.total_amount += duration
     end
   end
   
@@ -159,31 +178,74 @@ class Capture
     @state = :paused
   end
 
-  def encode(output_file = "output.mp4")
+  # Refactoring this to make it more testable and so it works:
+  # Encoding now has two steps: Merge the files (if more than one)
+  # and then encode
+  # Encode takes an optional block that updates a progress bar or other type
+  # of status
+  # I believe I have to split it out so that variables are in scope when I 
+  # need them to be, but mainly I need to make this testable, and now is the time.
+  
+  def encode(output_file = "output.mp4", &feedback)
     state = :encoding
+    output_file =~ /.mp4$/ || output_file += ".mp4"
+    
+    $logger.debug "Encoding #{Capture.format_input_files_for_mkvmerge(@tmp_files)}...\n"
+    $logger.debug("Total duration #{self.total_amount.to_s}")
+
+    self.merge(Capture.tmp_file_name, @tmp_files)
+    self.final_encode(output_file, Capture.tmp_file_name, feedback)
+  end 
+  
+  # This is ugly.
+  # When you open co-processes, they do get stuck together.
+  # It seems the if I don't read what's coming out of the co-process, it waits.
+  # But if I read it, then it goes right to the end until it returns.
+  
+  def merge(output_file, input_files, feedback = proc {} )
+    $logger.debug("Merging #{input_files.size.to_s} files: #{Capture.format_input_files_for_mkvmerge(input_files)}")
+    
+    if input_files.size == 1
+      cmd_line = "cp #{input_files[0]} #{output_file}"
+      #cmd_line = "sleep 5"
+    else
+      cmd_line = "mkvmerge -v -o #{output_file} #{Capture.format_input_files_for_mkvmerge(input_files)}"
+    end
+    $logger.debug "Merge command line: #{cmd_line}"
+    i, oe, t = Open3.popen2e(cmd_line)
+    @pid = t.pid
+    Process.detach(@pid)
+    $logger.debug "@pid: #{@pid.to_s}"
+    
+    t = Thread.new do
+      # $logger.debug "Sleeping..."
+      # sleep 2
+      # $logger.debug "Awake!"
+      while oe.gets do
+        # $logger.debug "Line"
+      end
+      yield 1.0, "Done"
+    end
+    return t
+  end
+  
+  def final_encode(output_file, input_file, feedback = proc {} )
     encode_fps=24
     video_encoding_options="-vcodec libx264 -pre:v ultrafast"
-
-    output_file =~ /.mp4$/ || output_file += ".mp4"
     
     # I think I want to popen here, save the pid, then fork and start
     # updating progress based on what I read, which the main body
     # returns and carries on.
-    $logger.debug "Encoding #{self.input_files}...\n"
     
-    cmd_line = "mkvmerge -o #{self.tmp_file_name} #{self.input_files}"
-    $logger.debug cmd_line
-    $logger.debug(`#{cmd_line}`)
-    $logger.debug "mkvmerge return value #{$?}"
-    
+    # The following doesn't seem to be necessary
+#      -s #{@width}x#{@height} \
     cmd_line = "avconv \
-        -i #{tmp_file_name} \
-        #{video_encoding_options} \
-        -r #{encode_fps} \
-        -s #{@width}x#{@height} \
-        -threads 0 \
-        -y \
-        '#{output_file}'"
+      -i #{input_file} \
+      #{video_encoding_options} \
+      -r #{encode_fps} \
+      -threads 0 \
+      -y \
+      '#{output_file}'"
       
     $logger.debug cmd_line
     
@@ -194,16 +256,18 @@ class Capture
     Thread.new do
       while (line = oe.gets("\r"))
         $logger.debug "****" + line
-        (line =~ /time=([0-9]*\.[0-9]*)/) && (self.current_amount = $1.to_f)
-        # $logger.debug '****' + $1
-        # $logger.debug "******** #{self.current_amount} #{self.fraction_complete}"
-        yield self.fraction_complete, self.time_remaining_s
+        if (line =~ /time=([0-9]*\.[0-9]*)/) 
+          $logger.debug '******' + $1
+          self.current_amount = $1.to_f
+        end
+        $logger.debug "******** #{self.current_amount} #{self.fraction_complete}"
+        feedback.call self.fraction_complete, self.time_remaining_s
       end
       $logger.debug "reached end of file"
       @state = :stopped
-      yield self.fraction_complete = 1, self.time_remaining_s
+      feedback.call self.fraction_complete = 1, self.time_remaining_s
     end
-  end 
+  end
   
   def stop_encoding
     begin
@@ -214,7 +278,8 @@ class Capture
   end
 
   def cleanup
-    @tmp_files.each { |f| File.delete(f) }
+    @tmp_files.each { |f| File.delete(f.name) if File.exists?(f.name) }
+    File.delete(self.tmp_file_name) if File.exists?(self.tmp_file_name)
   end
 end
 
