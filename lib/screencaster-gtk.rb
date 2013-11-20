@@ -424,14 +424,17 @@ class ScreencasterGtk
     (ScreencasterGtk::LOGGER.debug("Can't run two instances at once."); exit 1) if ! existing_pid.nil?
     
     @chain = Signal.trap("EXIT") { 
+      LOGGER.debug "In ScreencasterGtk exit handler @chain: #{@chain}"
       ScreencasterGtk::LOGGER.debug("Exiting")
       ScreencasterGtk::LOGGER.debug("unlinking") if File.file?(PIDFILE)
       File.unlink(PIDFILE) if File.file?(PIDFILE)
       `gconftool-2 --unset /apps/metacity/keybinding_commands/screencaster_pause`
       `gconftool-2 --unset /apps/metacity/global_keybindings/run_screencaster_pause`
-      @chain.call unless @chain == "DEFAULT"
+      LOGGER.debug "About to call next trap with @chain: #{@chain}"
+      @chain.call unless @chain.nil?
     }
-    
+    LOGGER.debug "ScreencasterGtk.whatever @chain: #{@chain}"
+
     `gconftool-2 --set /apps/metacity/keybinding_commands/screencaster_pause --type string "screencaster --pause"`
     `gconftool-2 --set /apps/metacity/global_keybindings/run_screencaster_pause --type string "<Control><Alt>S"`
 

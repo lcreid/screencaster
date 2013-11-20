@@ -12,7 +12,11 @@ class Capture
   
   def initialize
     @tmp_files = []
-    @exit_chain = trap("EXIT") { self.cleanup; @exit_chain.call unless @exit_chain == "DEFAULT" }
+    @exit_chain = Signal.trap("EXIT") { 
+      self.cleanup
+      $logger.debug "In capture about to chain to trap @exit_chain: #{@exit_chain}"
+      @exit_chain.call unless @exit_chain.nil? 
+    }
     $logger.debug "@exit_chain: #{@exit_chain.to_s}"
     @state = :stopped
   end
@@ -154,7 +158,9 @@ class Capture
     Thread.new do
       while line = oe.gets("\r")
         $logger.debug "****" + line
-        (line =~ /time=([0-9]*\.[0-9]*)/) && (duration = $1.to_f)
+        if (line =~ /time=([0-9]*\.[0-9]*)/)
+          duration = $1.to_f
+        end
       end
       self.total_amount += duration
     end
@@ -278,8 +284,8 @@ class Capture
   end
 
   def cleanup
-    @tmp_files.each { |f| File.delete(f.name) if File.exists?(f.name) }
-    File.delete(self.tmp_file_name) if File.exists?(self.tmp_file_name)
+    @tmp_files.each { |f| File.delete(f) if File.exists?(f) }
+    File.delete(Capture.tmp_file_name) if File.exists?(Capture.tmp_file_name)
   end
 end
 
