@@ -34,7 +34,7 @@ file GEM =>
   system "gem build screencaster-gtk.gemspec"
 end
 
-desc "Push the gem to ???"
+desc "Push the gem to RubyGems.org"
 task :release => :build do
   system "gem push #{GEM}"
 end

@@ -199,7 +199,8 @@ class Capture
     $logger.debug "Encoding #{Capture.format_input_files_for_mkvmerge(@tmp_files)}...\n"
     $logger.debug("Total duration #{self.total_amount.to_s}")
 
-    self.merge(Capture.tmp_file_name, @tmp_files)
+    t = self.merge(Capture.tmp_file_name, @tmp_files)
+    t.value
     self.final_encode(output_file, Capture.tmp_file_name, feedback)
   end 
   
@@ -230,7 +231,7 @@ class Capture
       while oe.gets do
         # $logger.debug "Line"
       end
-      yield 1.0, "Done"
+      feedback.call 1.0, "Done"
     end
     return t
   end
