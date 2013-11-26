@@ -34,12 +34,14 @@ module ProgressTracker
   end
   
   def time_remaining_s(format = "%dh %02dm %02ds remaining")
-    t = self.time_remaining
+    ProgressTracker.format_seconds(self.time_remaining, format)
+  end
+  
+  def self.format_seconds(t, format = "%dh %02dm %02ds")
     h = (t / 3600).to_i
     m = ((t - h * 3600) / 60).to_i
     s = (t % 60).to_i
     sprintf(format, h, m, s)
   end
-  
 end
 

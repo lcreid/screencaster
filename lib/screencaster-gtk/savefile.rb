@@ -4,7 +4,7 @@ class SaveFile
   def self.set_up_dialog(file_name = "output.mp4")
     @dialog = Gtk::FileChooserDialog.new(
         "Save File As ...",
-        $window,
+        nil,
         Gtk::FileChooser::ACTION_SAVE,
         nil,
         [ Gtk::Stock::CANCEL, Gtk::Dialog::RESPONSE_CANCEL ],

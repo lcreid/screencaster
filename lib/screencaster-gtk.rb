@@ -214,7 +214,10 @@ class ScreencasterGtk
   def record
     LOGGER.debug "Recording"
     recording
-    @capture_window.record
+    @capture_window.record { |percent, time_elapsed| 
+      @progress_bar.text = time_elapsed
+      LOGGER.debug "Did elapsed time: #{time_elapsed}"
+    }
   end
   
   def pause

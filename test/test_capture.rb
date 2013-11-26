@@ -60,11 +60,16 @@ class TestCapture < Test::Unit::TestCase
     amount_done = 0.0
     c = Capture.new
     t = c.merge(output, input) do | fraction, message |
-      puts fraction, message
+        puts "+++++++++++++++++ #{fraction}, #{message}"
       amount_done = fraction
     end
+    $logger.debug "Thread from c.merge: #{t}"
+    # puts Thread.list
+    # Thread.list.each { |t| puts "#{t}: #{t.status}" }
 #    begin Process.wait(c.pid) rescue SystemCallError end
+    # $logger.debug "Thread from merge status: #{t.status}"
     t.value
+    # Thread.list.each { |t| puts "#{t}: #{t.status}" }
     assert_equal 1.0, amount_done
   end
   
@@ -140,6 +145,10 @@ class TestCapture < Test::Unit::TestCase
     c.fraction_complete = 1
     assert_not_nil c.current_amount
     assert_equal 4, c.current_amount
+  end
+  
+  def test_format_seconds
+    assert_equal "1h 01m 01s", Capture::ProgressTracker.format_seconds(3661) 
   end
 end
 

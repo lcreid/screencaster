@@ -20,7 +20,6 @@ GEM = "screencaster-gtk-#{ScreencasterGtk::VERSION}.gem"
 DEBIAN_FILES = FileList.new(File.join(TMPDIR, GEM),
   File.join(MAN1DIR, "screencaster.1.gz"),
   File.join(DATAROOTDIR, "applications", "screencaster.desktop"),
-#  File.join(DATAROOTDIR, "icons", "Mint-X", "apps", "scalable", "screencaster.svg"))
   File.join(DATAROOTDIR, "pixmaps", "screencaster.svg"))
 
 desc "Create the gem."

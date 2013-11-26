@@ -108,10 +108,9 @@ class Capture
       @tmp_files = [] 
       self.total_amount = 0.0
     end
-    record_one_file(self.new_tmp_file)
-  end
-  
-  def record_one_file(output_file)
+
+    output_file = self.new_tmp_file
+
     @state = :recording
     capture_fps=24
     audio_options="-f alsa -ac 1 -ab 192k -i pulse -acodec pcm_s16le"
@@ -160,9 +159,12 @@ class Capture
         $logger.debug "****" + line
         if (line =~ /time=([0-9]*\.[0-9]*)/)
           duration = $1.to_f
+          $logger.debug "Recording about to yield #{self.total_amount + duration}"
+          yield 0.0, ProgressTracker::format_seconds(self.total_amount + duration)
         end
       end
       self.total_amount += duration
+      yield 0.0, ProgressTracker::format_seconds(self.total_amount)
     end
   end
   
@@ -211,27 +213,40 @@ class Capture
   
   def merge(output_file, input_files, feedback = proc {} )
     $logger.debug("Merging #{input_files.size.to_s} files: #{Capture.format_input_files_for_mkvmerge(input_files)}")
+    $logger.debug("Feedback #{feedback}")
     
+    # TODO: cp doesn't give feedback like mkvmerge does...
     if input_files.size == 1
-      cmd_line = "cp #{input_files[0]} #{output_file}"
+      cmd_line = "cp -v #{input_files[0]} #{output_file}"
       #cmd_line = "sleep 5"
     else
       cmd_line = "mkvmerge -v -o #{output_file} #{Capture.format_input_files_for_mkvmerge(input_files)}"
     end
     $logger.debug "Merge command line: #{cmd_line}"
     i, oe, t = Open3.popen2e(cmd_line)
+    $logger.debug "Thread from popen2e: #{t}"
     @pid = t.pid
     Process.detach(@pid)
     $logger.debug "@pid: #{@pid.to_s}"
     
     t = Thread.new do
+      $logger.debug "Thread from Thread.new: #{t}"
       # $logger.debug "Sleeping..."
       # sleep 2
       # $logger.debug "Awake!"
-      while oe.gets do
-        # $logger.debug "Line"
+      while l = oe.gets do
+        # TODO: Lots for duplicate code in this line to clean up.
+        if block_given? 
+          yield 0.5, ""
+        else
+          feedback.call 0.5, ""
+        end
       end
-      feedback.call 1.0, "Done"
+      if block_given?
+        yield 1.0, "Done"
+      else
+        feedback.call 1.0, "Done"
+      end
     end
     return t
   end
