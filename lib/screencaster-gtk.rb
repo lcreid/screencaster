@@ -22,13 +22,19 @@ class ScreencasterGtk
   PIDFILE = File.join(SCREENCASTER_DIR, "run", "screencaster.pid")
 
   DEFAULT_SPACE = 10
+  RECORD_IMAGE = Gtk::Image.new(Gtk::Stock::MEDIA_RECORD, Gtk::IconSize::SMALL_TOOLBAR)
+  PAUSE_IMAGE = Gtk::Image.new(Gtk::Stock::MEDIA_PAUSE, Gtk::IconSize::SMALL_TOOLBAR)
+  STOP_IMAGE = Gtk::Image.new(Gtk::Stock::MEDIA_STOP, Gtk::IconSize::SMALL_TOOLBAR)
+  CANCEL_IMAGE = Gtk::Image.new(Gtk::Stock::CANCEL, Gtk::IconSize::SMALL_TOOLBAR)
+  QUIT_IMAGE = Gtk::Image.new(Gtk::Stock::QUIT, Gtk::IconSize::SMALL_TOOLBAR)
+
 
   def initialize
     #### Create Main Window
     
     LOGGER.info "Started"
-
-    @window = Gtk::Window.new
+    
+    @window = Gtk::Window.new("Screencaster")
     @window.signal_connect("delete_event") {
       LOGGER.debug "delete event occurred"
       #true
@@ -42,7 +48,7 @@ class ScreencasterGtk
     
     # The following gets minimize and restore events, but not iconify and de-iconify 
     @window.signal_connect("window_state_event") { |w, e|
-      puts ("window_state_event #{e.to_s}")
+      LOGGER.debug "window_state_event #{e.to_s}"
     }
     
     @window.border_width = DEFAULT_SPACE
@@ -55,7 +61,8 @@ class ScreencasterGtk
     }
     bottom_columns.pack_start(@select_button, true, false)
     
-    button = Gtk::Button.new("Quit")
+    button = Gtk::Button.new(Gtk::Stock::QUIT)
+    button.image = QUIT_IMAGE
     button.signal_connect("clicked") {
       self.quit
     }
@@ -66,21 +73,23 @@ class ScreencasterGtk
     
     control_columns = Gtk::HBox.new(false, ScreencasterGtk::DEFAULT_SPACE) # children have different sizes, spaced by DEFAULT_SPACE
     
-    @record_button = Gtk::Button.new("Record")
-    @record_button.sensitive = false
-    @record_button.signal_connect("clicked") {
-      self.record
+    @record_pause_button = Gtk::Button.new
+    @record_pause_button.image = RECORD_IMAGE
+    @record_pause_button.sensitive = false
+    @record_pause_button.signal_connect("clicked") {
+      self.record_pause
     }
-    control_columns.pack_start(@record_button, true, false)
+    control_columns.pack_start(@record_pause_button, true, false)
     
-    @pause_button = Gtk::Button.new("Pause")
-    @pause_button.sensitive = false
-    @pause_button.signal_connect("clicked") {
-      self.pause
-    }
-    control_columns.pack_start(@pause_button, true, false)
-    
-    @stop_button = Gtk::Button.new("Stop")
+    # @pause_button = Gtk::Button.new(Gtk::Stock::MEDIA_PAUSE)
+    # @pause_button.sensitive = false
+    # @pause_button.signal_connect("clicked") {
+      # self.pause
+    # }
+    # control_columns.pack_start(@pause_button, true, false)
+    # 
+    @stop_button = Gtk::Button.new
+    @stop_button.image = STOP_IMAGE
     @stop_button.sensitive = false
     @stop_button.signal_connect("clicked") {
       self.stop_recording
@@ -94,7 +103,8 @@ class ScreencasterGtk
     @progress_bar = Gtk::ProgressBar.new
     columns.pack_start(@progress_bar, true, false)
     
-    @cancel_button = Gtk::Button.new("Cancel")
+    @cancel_button = Gtk::Button.new
+    @cancel_button.image = CANCEL_IMAGE
     @cancel_button.sensitive = false
     @cancel_button.signal_connect("clicked") {
       self.stop_encoding
@@ -208,7 +218,21 @@ class ScreencasterGtk
     LOGGER.debug "Selecting Window"
     @capture_window = Capture.new
     @capture_window.get_window_to_capture
-    @record_button.sensitive = true
+    @record_pause_button.sensitive = true
+  end
+  
+  def record_pause
+    LOGGER.debug "Record/Pause state: #{@capture_window.state}"
+    case @capture_window.state
+    when :recording
+      LOGGER.debug "Record/Pause -- pause"
+      pause
+    when :paused, :stopped
+      LOGGER.debug "Record/Pause -- record"
+      record
+    else
+      LOGGER.error "#{__FILE__} #{__LINE__}: Can't happen (state #{@capture_window.state})."
+    end
   end
   
   def record
@@ -251,14 +275,14 @@ class ScreencasterGtk
   
   def stop
     case @capture_window.state
-    when :recording || :paused
+    when :recording, :paused
       stop_recording
     when :encoding
       stop_encoding
     when :stopped
       # Do nothing
     else
-      LOGGER.error "#{__FILE__} #{__LINE__}: Can't happen."
+      LOGGER.error "#{__FILE__} #{__LINE__}: Can't happen (state #{@capture_window.state})."
     end
   end
   
@@ -275,42 +299,48 @@ class ScreencasterGtk
     when :stopped
       # Do nothing
     else
-      LOGGER.error "#{__FILE__} #{__LINE__}: Can't happen."
+      LOGGER.error "#{__FILE__} #{__LINE__}: Can't happen (state #{@capture_window.state})."
     end
   end
   
   def recording
-    self.status_icon.stock = Gtk::Stock::MEDIA_STOP
+    self.status_icon.stock = Gtk::Stock::MEDIA_PAUSE
+    @record_pause_button.image = PAUSE_IMAGE
     @select.sensitive = @select_button.sensitive = false
-    @pause.sensitive = @pause_button.sensitive = true
+    @record_pause_button.sensitive = true
+#    @pause.sensitive = @pause_button.sensitive = true
     @stop.sensitive = @stop_button.sensitive = true
-    @record.sensitive = @record_button.sensitive = false
+    @record.sensitive = false
     @cancel_button.sensitive = false
   end
   
   def not_recording
     self.status_icon.stock = Gtk::Stock::MEDIA_RECORD
+    @record_pause_button.image = RECORD_IMAGE
     @select.sensitive = @select_button.sensitive = true
-    @pause.sensitive = @pause_button.sensitive = false
+#    @pause.sensitive = @pause_button.sensitive = false
     @stop.sensitive = @stop_button.sensitive = false
-    @record.sensitive = @record_button.sensitive = ! @capture_window.nil?
+    @record.sensitive = @record_pause_button.sensitive = ! @capture_window.nil?
     @cancel_button.sensitive = false
   end
   
   def paused
     self.status_icon.stock = Gtk::Stock::MEDIA_RECORD
+    @record_pause_button.image = RECORD_IMAGE
+    @record_pause_button.sensitive = true
     @select.sensitive = @select_button.sensitive = false
-    @pause.sensitive = @pause_button.sensitive = false
+#    @pause.sensitive = @pause_button.sensitive = false
     @stop.sensitive = @stop_button.sensitive = true
-    @record.sensitive = @record_button.sensitive = ! @capture_window.nil?
+    @record.sensitive = ! @capture_window.nil?
     @cancel_button.sensitive = true
   end
   
   def encoding
     self.status_icon.stock = Gtk::Stock::MEDIA_STOP
-    @pause.sensitive = @pause_button.sensitive = false
+    @record_pause_button.image = RECORD_IMAGE
+#    @pause.sensitive = @pause_button.sensitive = false
     @stop.sensitive = @stop_button.sensitive = false
-    @record.sensitive = @record_button.sensitive = false
+    @record.sensitive = @record_pause_button.sensitive = false
     @cancel_button.sensitive = true
   end
   
@@ -406,7 +436,7 @@ class ScreencasterGtk
       Pause a running capture, or restart a paused capture
           EOF
           exit 0
-        when '--pause' || '--start'
+        when '--pause', '--start'
           if existing_pid then
             ScreencasterGtk::LOGGER.debug("Got a pause for PID #{existing_pid}")
             begin
