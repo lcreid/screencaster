@@ -52,24 +52,21 @@ class ScreencasterGtk
     }
     
     @window.border_width = DEFAULT_SPACE
+   
+    control_bar = Gtk::HBox.new(false, ScreencasterGtk::DEFAULT_SPACE)
     
-    bottom_columns = Gtk::HBox.new(false, ScreencasterGtk::DEFAULT_SPACE) # children have different sizes, spaced by DEFAULT_SPACE
-    
-    @select_button = Gtk::Button.new("Select Window to Record")
+    @select_button = Gtk::Button.new("Select Window")
     @select_button.signal_connect("clicked") {
       self.select
     }
-    bottom_columns.pack_start(@select_button, true, false)
+    control_bar.pack_start(@select_button, true, false)
     
     button = Gtk::Button.new(Gtk::Stock::QUIT)
     button.image = QUIT_IMAGE
     button.signal_connect("clicked") {
       self.quit
     }
-    bottom_columns.pack_end(button, true, false)
-    
-    bottom_row = Gtk::VBox.new(false, ScreencasterGtk::DEFAULT_SPACE) # children have different sizes, spaced by DEFAULT_SPACE
-    bottom_row.pack_end(bottom_columns, false)
+    control_bar.pack_end(button, true, false)
     
     control_columns = Gtk::HBox.new(false, ScreencasterGtk::DEFAULT_SPACE) # children have different sizes, spaced by DEFAULT_SPACE
     
@@ -79,7 +76,7 @@ class ScreencasterGtk
     @record_pause_button.signal_connect("clicked") {
       self.record_pause
     }
-    control_columns.pack_start(@record_pause_button, true, false)
+    control_bar.pack_start(@record_pause_button, true, false)
     
     # @pause_button = Gtk::Button.new(Gtk::Stock::MEDIA_PAUSE)
     # @pause_button.sensitive = false
@@ -94,14 +91,7 @@ class ScreencasterGtk
     @stop_button.signal_connect("clicked") {
       self.stop_recording
     }
-    control_columns.pack_start(@stop_button, true, false)
-    
-    control_row = Gtk::VBox.new(false, ScreencasterGtk::DEFAULT_SPACE) # children have different sizes, spaced by DEFAULT_SPACE
-    control_row.pack_start(control_columns, true, false)
-    
-    columns = Gtk::HBox.new(false, ScreencasterGtk::DEFAULT_SPACE)
-    @progress_bar = Gtk::ProgressBar.new
-    columns.pack_start(@progress_bar, true, false)
+    control_bar.pack_start(@stop_button, true, false)
     
     @cancel_button = Gtk::Button.new
     @cancel_button.image = CANCEL_IMAGE
@@ -109,13 +99,20 @@ class ScreencasterGtk
     @cancel_button.signal_connect("clicked") {
       self.stop_encoding
     }
-    columns.pack_start(@cancel_button, true, false)
+    control_bar.pack_start(@cancel_button, true, false)
+    
+    control_row = Gtk::VBox.new(false, ScreencasterGtk::DEFAULT_SPACE) # children have different sizes, spaced by DEFAULT_SPACE
+    control_row.pack_start(control_bar, true, false)
+    
+    columns = Gtk::HBox.new(false, ScreencasterGtk::DEFAULT_SPACE)
+    @progress_bar = Gtk::ProgressBar.new
+    @progress_bar.text = "Select Window to Record"
+    columns.pack_start(@progress_bar, true, true)
     
     progress_row = Gtk::VBox.new(false, ScreencasterGtk::DEFAULT_SPACE) # children have different sizes, spaced by DEFAULT_SPACE
     progress_row.pack_start(columns, true, false)
     
     the_box = Gtk::VBox.new(false, ScreencasterGtk::DEFAULT_SPACE)
-    the_box.pack_end(bottom_row, false, false)
     the_box.pack_end(progress_row, false, false)
     the_box.pack_end(control_row, false, false)
     
