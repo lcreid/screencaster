@@ -61,7 +61,7 @@ class ScreencasterGtk
     }
     control_bar.pack_start(@select_button, true, false)
     
-    button = Gtk::Button.new(Gtk::Stock::QUIT)
+    button = Gtk::Button.new
     button.image = QUIT_IMAGE
     button.signal_connect("clicked") {
       self.quit
