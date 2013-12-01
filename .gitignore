@@ -12,3 +12,5 @@ osx/
 *.gz
 *.gem
 *.log
+doc/
+.yardoc/

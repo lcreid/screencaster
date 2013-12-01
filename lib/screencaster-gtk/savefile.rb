@@ -1,6 +1,13 @@
 require 'gtk2'
 
+=begin rdoc
+Run the standard save file dialog for screencaster
+=end
 class SaveFile
+  
+=begin rdoc
+Create the file chooser dialogue with a default file name.
+=end
   def self.set_up_dialog(file_name = "output.mp4")
     @dialog = Gtk::FileChooserDialog.new(
         "Save File As ...",
@@ -10,22 +17,15 @@ class SaveFile
         [ Gtk::Stock::CANCEL, Gtk::Dialog::RESPONSE_CANCEL ],
         [ Gtk::Stock::SAVE, Gtk::Dialog::RESPONSE_ACCEPT ]
     )
-    # dialog.signal_connect('response') do |w, r|
-      # odg = case r
-        # when Gtk::Dialog::RESPONSE_ACCEPT
-          # filename = dialog.filename
-          # "'ACCEPT' (#{r}) button pressed -- filename is {{ #{filename} }}"
-        # when Gtk::Dialog::RESPONSE_CANCEL;   "'CANCEL' (#{r}) button pressed"
-        # else; "Undefined response ID; perhaps Close-x? (#{r})"
-      # end
-      # puts odg
-      # dialog.destroy 
-    # end
     @dialog.current_name = GLib.filename_to_utf8(file_name)
     @dialog.current_folder = GLib.filename_to_utf8(Dir.getwd)
     @dialog.do_overwrite_confirmation = true
   end
   
+=begin rdoc
+Do the workflow around saving a file, warning the user before allow
+them to abandon their capture.
+=end
   def self.get_file_to_save
     @dialog || SaveFile.set_up_dialog
     result = @dialog.run
@@ -43,6 +43,10 @@ class SaveFile
     end
   end
   
+=begin rdoc
+Confirm cancellation when the user has captured something but not
+saved it.
+=end
   def self.confirm_cancel(parent)
     dialog = Gtk::Dialog.new(
       "Confirm Cancel",

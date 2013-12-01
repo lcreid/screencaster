@@ -1,3 +1,3 @@
 class ScreencasterGtk
-  VERSION = '0.0.4.alpha1'
+  VERSION = '0.0.5.alpha1'
 end

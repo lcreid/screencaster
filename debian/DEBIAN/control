@@ -4,7 +4,7 @@ Section: video
 Installed-Size: 
 Maintainer: Larry Reid <larry.reid@jadesystems.ca>
 Architecture: all
-Version: 1.0.0-4
+Version: 1.0.0-5
 Depends: libav-tools (>=0.8.6),
  libavcodec-extra-53, 
  wmctrl, 

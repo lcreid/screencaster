@@ -2,6 +2,9 @@ require 'open3'
 require 'logger'
 require "screencaster-gtk/progresstracker"
 
+=begin rdoc
+Select a window or area of the screen to capture, capture it, and encode it.
+=end
 class Capture
   include ProgressTracker
   
