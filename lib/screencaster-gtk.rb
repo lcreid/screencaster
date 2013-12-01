@@ -7,13 +7,16 @@ require "screencaster-gtk/savefile"
 
 ##########################
 
-
+=begin rdoc
+A program to capture screencasts -- video from monitor and sound from microphone
+=end
 class ScreencasterGtk
+  protected
   attr_reader :capture_window, :window
-  attr_writer :status_icon
+#  atr_writer :status_icon
     
   SCREENCASTER_DIR = File.join(Dir.home, ".screencaster")
-  # Set up logging. Keep 5 log files of a 100K each
+  # Set up logging. Keep 5 log files of 100K each
   log_dir = File.join(SCREENCASTER_DIR, 'log')
   FileUtils.mkpath log_dir
   LOGGER = Logger.new(File.join(log_dir, 'screencaster.log'), 5, 100000)
@@ -27,7 +30,6 @@ class ScreencasterGtk
   STOP_IMAGE = Gtk::Image.new(Gtk::Stock::MEDIA_STOP, Gtk::IconSize::SMALL_TOOLBAR)
   CANCEL_IMAGE = Gtk::Image.new(Gtk::Stock::CANCEL, Gtk::IconSize::SMALL_TOOLBAR)
   QUIT_IMAGE = Gtk::Image.new(Gtk::Stock::QUIT, Gtk::IconSize::SMALL_TOOLBAR)
-
 
   def initialize
     #### Create Main Window
@@ -378,6 +380,12 @@ class ScreencasterGtk
     self.status_icon.visible = false
   end
   
+  public
+  
+  # Shows the screencaster window and starts processing events from the user.
+  #
+  # The hot key toggles between capture and pause. 
+  # The default hot key is Ctrl+Alt+S.
   def main
     LOGGER.info "Starting"
     self.not_recording
@@ -386,13 +394,15 @@ class ScreencasterGtk
     LOGGER.info "Finished"
   end
   
+  # Process command line arguments, set up the log file, and set up hot keys.
+  #
+  # * If there's another instance running for the user and the --pause or --start 
+  #   flags are present, send the USR1 signal to the running instance and exit.
+  # * Don't run the program if there's another instance running for the user.
+  # * If there's no other instance running for the user, and the --pause or --start 
+  #   flags are not present, start normally.
+  # *   The default hot key is Ctrl+Alt+S.
   def set_up
-    # Don't run the program if there's another instance running for the user.
-    # If there's another instance running for the user and the --pause or --start 
-    # flags are present, send the USR1 signal to the running instance
-    # and exit.
-    # If there's no other instance running for the user, and the --pause or --start 
-    # flags are not present, start normally.
     
     output_file = "/home/reid/test-key.log"
     
@@ -424,13 +434,13 @@ class ScreencasterGtk
       case opt
         when '--help'
           puts <<-EOF
-    screencaster [OPTION] ... 
-    
-    -h, --help:
-       show help
-    
-    -s, -p, --start, --pause:
-      Pause a running capture, or restart a paused capture
+screencaster [OPTION] ... 
+
+-h, --help:
+   show help
+
+-s, -p, --start, --pause:
+  Pause a running capture, or restart a paused capture
           EOF
           exit 0
         when '--pause', '--start'
@@ -453,6 +463,14 @@ class ScreencasterGtk
     # TODO: Check for running process and if not, ignore PIDFILE.
     (ScreencasterGtk::LOGGER.debug("Can't run two instances at once."); exit 1) if ! existing_pid.nil?
     
+    # Add application properties for PulseAudio
+    # See: http://www.freedesktop.org/wiki/Software/PulseAudio/Documentation/Developer/Clients/ApplicationProperties/
+    # Unfortunately, this doesn't seem to help
+    # Perhaps because avconv is a separate program and is setting its own values
+    GLib::application_name = "Screencaster"
+    Gtk::Window.default_icon_name = "screencaster"
+    GLib::setenv("PULSE_PROP_media.role", "video")
+
     @chain = Signal.trap("EXIT") { 
       LOGGER.debug "In ScreencasterGtk exit handler @chain: #{@chain}"
       ScreencasterGtk::LOGGER.debug("Exiting")
