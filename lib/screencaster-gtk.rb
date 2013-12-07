@@ -23,6 +23,8 @@ class ScreencasterGtk
   LOGGER.level = Logger::DEBUG
   
   PIDFILE = File.join(SCREENCASTER_DIR, "run", "screencaster.pid")
+  
+  SOUND_SETTINGS = "/usr/bin/gnome-control-center"
 
   DEFAULT_SPACE = 10
   RECORD_IMAGE = Gtk::Image.new(Gtk::Stock::MEDIA_RECORD, Gtk::IconSize::SMALL_TOOLBAR)
@@ -102,6 +104,17 @@ class ScreencasterGtk
       self.stop_encoding
     }
     control_bar.pack_start(@cancel_button, true, false)
+    
+    if File.executable? SOUND_SETTINGS
+      @sound_settings_button = Gtk::Button.new "Sound"
+      # There appears to be no stock icon for someting like a volume control.
+      #@sound_settings_button.image = AUDIO_VOLUME_MEDIUM
+      @sound_settings_button.sensitive = true
+      @sound_settings_button.signal_connect("clicked") {
+        Thread.new { `#{SOUND_SETTINGS} sound` }
+      }
+      control_bar.pack_start(@sound_settings_button, true, false)
+    end
     
     control_row = Gtk::VBox.new(false, ScreencasterGtk::DEFAULT_SPACE) # children have different sizes, spaced by DEFAULT_SPACE
     control_row.pack_start(control_bar, true, false)
