@@ -1,6 +1,7 @@
 require 'test/unit'
 require 'screencaster-gtk/capture'
 require 'logger'
+require 'fileutils'
 
 # TODO: How to test the actual capture?
 # There's non-trivial stuff in there, like getting the overall duration.
@@ -23,14 +24,12 @@ class TestCapture < Test::Unit::TestCase
     input = [ file_name("a.mkv"), file_name("b.mkv") ]
     
     c = Capture.new
-    c.merge(output, input)
+    t = c.merge(output, input)
     # Should have something going in the background here.
-    begin Process.wait(c.pid) rescue SystemCallError end
-    # assert_nothing_raised do Process.wait(c.pid) end
+    assert_equal "run", t.status
+    assert_equal 0, t.value.exitstatus
     assert File.exists?(output), "Output file #{output} not found."
-    assert_raise Errno::ECHILD do
-      Process.wait(c.pid)
-    end
+    assert_equal 1, Thread.list.size
   end
   
   def test_merge_one_file
@@ -39,17 +38,15 @@ class TestCapture < Test::Unit::TestCase
     input = [ file_name("a.mkv") ]
     
     c = Capture.new
-    c.merge(output, input)
+    t = c.merge(output, input)
+    assert_equal 0, t.value.exitstatus
     # Should have something going in the background here, but it happens
     # so fast that it's hard to catch it. Since the two file case checks,
     # I won't bother here.
-    begin Process.wait(c.pid) rescue SystemCallError end
     assert File.exists?(output), "Output file #{output} not found."
     assert File.exists?(input[0]), "Input file #{input[0]} gone."
     # Process should be gone by now
-    assert_raise Errno::ECHILD do
-      Process.wait(c.pid)
-    end
+    assert_equal 1, Thread.list.size
   end
   
   def test_block_merge
@@ -64,13 +61,9 @@ class TestCapture < Test::Unit::TestCase
       amount_done = fraction
     end
     $logger.debug "Thread from c.merge: #{t}"
-    # puts Thread.list
-    # Thread.list.each { |t| puts "#{t}: #{t.status}" }
-#    begin Process.wait(c.pid) rescue SystemCallError end
-    # $logger.debug "Thread from merge status: #{t.status}"
-    t.value
-    # Thread.list.each { |t| puts "#{t}: #{t.status}" }
+    assert_equal 0, t.value.exitstatus
     assert_equal 1.0, amount_done
+    assert_equal 1, Thread.list.size
   end
   
   def test_final_encode
@@ -84,15 +77,51 @@ class TestCapture < Test::Unit::TestCase
     
     c = Capture.new
     t = c.final_encode(output, input)
-    # Should have something going in the background here.
-    begin Process.wait(c.pid) rescue SystemCallError end
-    # assert_nothing_raised do Process.wait(c.pid) end
+    assert_equal "run", t.status
+    assert_equal 0, t.value.exitstatus
     assert File.exists?(output), "Output file #{output} not found."
     assert_raise Errno::ECHILD do
       Process.wait(c.pid)
     end
     `diff #{baseline} #{output}`
     assert_equal 0, $?.exitstatus, "Output file different from baseline"
+    assert_equal 1, Thread.list.size
+  end
+  
+  def test_record_failure
+    # This will fail since the capture area isn't set up
+    c = Capture.new
+    t = c.record
+    assert_equal "run", t.status
+    assert_not_equal 0, t.value.exitstatus
+    assert_equal 1, Thread.list.size
+  end
+  
+  def test_merge_failure
+    output = file_name("c-from-one.mkv")
+    File.delete(output) if File.exists?(output)
+    input = [ file_name("file-does-not-exist.mkv") ]
+    
+    c = Capture.new
+    t = c.merge(output, input)
+    assert_equal "run", t.status
+    assert_not_equal 0, t.value.exitstatus
+    assert_equal 1, Thread.list.size
+  end
+  
+  def test_final_encode_failure
+    o = "test-final-encode.mp4"
+    i = "file-does-not-exist.mkv"
+    baseline = file_name(File.join("baseline", o))
+    output = file_name(o)
+    File.delete(output) if File.exists?(output)
+    input = file_name(i)
+    
+    c = Capture.new
+    t = c.final_encode(output, input)
+    assert_equal "run", t.status
+    assert_not_equal 0, t.value.exitstatus
+    assert_equal 1, Thread.list.size
   end
   
   def test_default_total

@@ -136,22 +136,23 @@ class Capture
     
     $logger.debug cmd_line
 
-    i, oe, t = Open3.popen2e(cmd_line)
-    @pid = t.pid
-    Process.detach(@pid)
-    
     duration = 0.0
     Thread.new do
-      while line = oe.gets("\r")
-        $logger.debug "****" + line
-        if (line =~ /time=([0-9]*\.[0-9]*)/)
-          duration = $1.to_f
-          $logger.debug "Recording about to yield #{self.total_amount + duration}"
-          yield 0.0, ProgressTracker::format_seconds(self.total_amount + duration)
+      Open3.popen2e(cmd_line) do | i, oe, t |
+        @pid = t.pid
+      
+        while line = oe.gets("\r")
+          $logger.debug "****" + line
+          if (line =~ /time=([0-9]*\.[0-9]*)/)
+            duration = $1.to_f
+            $logger.debug "Recording about to yield #{self.total_amount + duration}"
+            yield 0.0, ProgressTracker::format_seconds(self.total_amount + duration) if block_given?
+          end
         end
+        self.total_amount += duration
+        yield 0.0, ProgressTracker::format_seconds(self.total_amount) if block_given?
+        t.value
       end
-      self.total_amount += duration
-      yield 0.0, ProgressTracker::format_seconds(self.total_amount)
     end
   end
   
@@ -210,37 +211,37 @@ class Capture
       cmd_line = "mkvmerge -v -o #{output_file} #{Capture.format_input_files_for_mkvmerge(input_files)}"
     end
     $logger.debug "Merge command line: #{cmd_line}"
-    i, oe, t = Open3.popen2e(cmd_line)
-    $logger.debug "Thread from popen2e: #{t}"
-    @pid = t.pid
-    Process.detach(@pid)
-    $logger.debug "@pid: #{@pid.to_s}"
-    
-    t = Thread.new do
-      $logger.debug "Thread from Thread.new: #{t}"
-      # $logger.debug "Sleeping..."
-      # sleep 2
-      # $logger.debug "Awake!"
-      while l = oe.gets do
-        # TODO: Lots for duplicate code in this line to clean up.
-        if block_given? 
-          yield 0.5, ""
-        else
-          feedback.call 0.5, ""
+    Thread.new do
+      Open3.popen2e(cmd_line) do | i, oe, t |
+        $logger.debug "Thread from popen2e: #{t}"
+        @pid = t.pid
+        $logger.debug "@pid: #{@pid.to_s}"
+      
+        $logger.debug "Thread from Thread.new: #{t}"
+        # $logger.debug "Sleeping..."
+        # sleep 2
+        # $logger.debug "Awake!"
+        while l = oe.gets do
+          # TODO: Lots for duplicate code in this line to clean up.
+          if block_given? 
+            yield 0.5, ""
+          else
+            feedback.call 0.5, ""
+          end
         end
-      end
-      if block_given?
-        yield 1.0, "Done"
-      else
-        feedback.call 1.0, "Done"
+        if block_given?
+          yield 1.0, "Done"
+        else
+          feedback.call 1.0, "Done"
+        end
+        t.value
       end
     end
-    return t
   end
   
   def final_encode(output_file, input_file, feedback = proc {} )
     # I think I want to popen here, save the pid, then fork and start
-    # updating progress based on what I read, which the main body
+    # updating progress based on what I read, while the main body
     # returns and carries on.
     
     cmd_line = "avconv \
@@ -251,23 +252,26 @@ class Capture
       
     $logger.debug cmd_line
     
-    i, oe, t = Open3.popen2e(cmd_line)
-    @pid = t.pid
-    Process.detach(@pid)
-    
     Thread.new do
-      while (line = oe.gets("\r"))
-        $logger.debug "****" + line
-        if (line =~ /time=([0-9]*\.[0-9]*)/) 
-          $logger.debug '******' + $1
-          self.current_amount = $1.to_f
+      Open3.popen2e(cmd_line) do | i, oe, t |
+        @pid = t.pid
+        # Process.detach(@pid)
+
+        while (line = oe.gets("\r"))
+          $logger.debug "****" + line
+          if (line =~ /time=([0-9]*\.[0-9]*)/) 
+            $logger.debug '******' + $1
+            self.current_amount = $1.to_f
+          end
+          $logger.debug "******** #{self.current_amount} #{self.fraction_complete}"
+          feedback.call self.fraction_complete, self.time_remaining_s
         end
-        $logger.debug "******** #{self.current_amount} #{self.fraction_complete}"
+        $logger.debug "reached end of file"
+        @state = :stopped
+        self.fraction_complete = 1
         feedback.call self.fraction_complete, self.time_remaining_s
+        t.value # A little bit of a head game here. Either return this, or maybe have to do t.value.value in caller
       end
-      $logger.debug "reached end of file"
-      @state = :stopped
-      feedback.call self.fraction_complete = 1, self.time_remaining_s
     end
   end
   

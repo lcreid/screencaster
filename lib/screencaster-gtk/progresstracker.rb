@@ -1,7 +1,10 @@
 module ProgressTracker
-  attr_reader :start_time
   attr_writer :start_time, :total_amount
   
+  def start_time
+    @start_time || @start_time = Time.now
+  end
+
   def percent_complete
     self.fraction_complete * 100
   end
@@ -19,9 +22,7 @@ module ProgressTracker
   end
 
   def current_amount=(amt)
-    @start_time || @start_time = Time.new
-
-    # puts "Setting current_amount #{amt}"
+    self.start_time
     @current_amount = amt
   end
   
@@ -30,7 +31,11 @@ module ProgressTracker
   end
   
   def time_remaining
-    (Time.new - @start_time) * (1 - self.fraction_complete) / self.fraction_complete
+    if self.fraction_complete == 0.0
+      1.0
+    else
+      (Time.new - self.start_time) * (1 - self.fraction_complete) / self.fraction_complete
+    end
   end
   
   def time_remaining_s(format = "%dh %02dm %02ds remaining")
