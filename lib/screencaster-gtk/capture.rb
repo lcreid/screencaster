@@ -12,6 +12,15 @@ class Capture
   attr_reader :state
   attr :pid
   attr :tmp_files
+
+  attr :capture_fps
+  attr :encode_fps
+  attr :capture_vcodec 
+  attr :qscale
+  attr :encode_vcodec
+  attr :acodec
+  attr :audio_sample_frequency
+  
   
   def initialize
     @tmp_files = []
@@ -20,8 +29,17 @@ class Capture
       $logger.debug "In capture about to chain to trap @exit_chain: #{@exit_chain}"
       @exit_chain.call unless @exit_chain.nil? 
     }
-    $logger.debug "@exit_chain: #{@exit_chain.to_s}"
+    #$logger.debug "@exit_chain: #{@exit_chain.to_s}"
+    
     @state = :stopped
+    
+    @capture_fps = 30
+    @encode_fps = 30 # Don't use this. Just copy through
+    @capture_vcodec = 'huffyuv' # I used to use ffv1. This is for capture
+    @qscale = '4' # Recommended for fast encoding by avconv docs
+    @encode_vcodec = 'libx264'
+    @acodec = 'aac' # Youtube prefers "AAC-LC" but I don't see one called "-LC"
+    @audio_sample_frequency = "48k"
   end
   
   def current_tmp_file
@@ -82,24 +100,6 @@ class Capture
     info =~ /Height:\s+([[:digit:]]+)/
     @height = $1.to_i
     
-    $logger.debug "Before xprop: Capturing #{@left.to_s},#{@top.to_s} to #{(@left+@width).to_s},#{(@top+@height).to_s}. Dimensions #{@width.to_s},#{@height.to_s}.\n"
-    
-    # Use xprop on the window to figure out decorations? Maybe...
-    # $logger.debug "Window ID: #{window_id}"
-    # info = `xprop -id #{window_id}`
-    # info =~ /_NET_FRAME_EXTENTS\(CARDINAL\) = ([[:digit:]]+), ([[:digit:]]+), ([[:digit:]]+), ([[:digit:]]+)/
-    # border_left = $1.to_i
-    # border_right = $2.to_i
-    # border_top = $3.to_i
-    # border_bottom = $4.to_i
-    # 
-    # $logger.debug "Borders: #{border_left.to_s},#{border_top.to_s},#{border_right.to_s},#{border_bottom.to_s}.\n"
-    # 
-    # top += border_top
-    # left += border_left
-    # height -= border_top + border_bottom
-    # width -= border_left + border_right
-    
     @height +=  @height % 2
     @width += @width % 2
 
@@ -115,38 +115,22 @@ class Capture
     output_file = self.new_tmp_file
 
     @state = :recording
-    capture_fps=24
-    audio_options="-f alsa -ac 1 -ab 192k -i pulse -acodec pcm_s16le"
+    audio_options="-f alsa -ac 1 -ab #{@audio_sample_frequency} -i pulse -acodec #{acodec}"
     
     # And i should probably popen here, save the pid, then fork and start
     # reading the input, updating the number of frames saved, or the time
     # recorded.
     $logger.debug "Capturing...\n"
-    # @pid = Process.spawn("avconv \
-        # #{audio_options} \
-        # -f x11grab \
-        # -show_region 1 \
-        # -r #{capture_fps} \
-        # -s #{@width}x#{@height} \
-        # -i :0.0+#{@left},#{@top} \
-        # -qscale 0 -vcodec ffv1 \
-        # -y \
-        # #{TMP_FILE}")
-    # Process.detach(@pid)
-    # avconv writes output to stderr, why?
-    # writes with CR and not LF, so it's hard to read
-    # with popen and 2>&1, an extra shell gets created that messed things up.
-    # popen2e helps.
-    vcodec = 'huffyuv' # I used to use ffv1
-    
+
     cmd_line = "avconv \
       #{audio_options} \
       -f x11grab \
       -show_region 1 \
-      -r #{capture_fps} \
+      -r #{@capture_fps} \
       -s #{@width}x#{@height} \
       -i :0.0+#{@left},#{@top} \
-      -qscale 0 -vcodec #{vcodec} \
+      -qscale #{@qscale} \
+      -vcodec #{@capture_vcodec} \
       -y \
       #{output_file}"
     
@@ -255,20 +239,13 @@ class Capture
   end
   
   def final_encode(output_file, input_file, feedback = proc {} )
-    encode_fps=24
-    video_encoding_options="-vcodec libx264 -pre:v ultrafast"
-    
     # I think I want to popen here, save the pid, then fork and start
     # updating progress based on what I read, which the main body
     # returns and carries on.
     
-    # The following doesn't seem to be necessary
-#      -s #{@width}x#{@height} \
     cmd_line = "avconv \
       -i #{input_file} \
-      #{video_encoding_options} \
-      -r #{encode_fps} \
-      -threads 0 \
+      -vcodec #{@encode_vcodec} \
       -y \
       '#{output_file}'"
       

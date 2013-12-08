@@ -59,65 +59,18 @@ class ScreencasterGtk
    
     control_bar = Gtk::HBox.new(false, ScreencasterGtk::DEFAULT_SPACE)
     
-    @select_button = Gtk::Button.new("Select Window")
-    @select_button.signal_connect("clicked") {
-      self.select
-    }
-    control_bar.pack_start(@select_button, true, false)
-    
-    button = Gtk::Button.new
-    button.image = QUIT_IMAGE
-    button.signal_connect("clicked") {
-      self.quit
-    }
-    control_bar.pack_end(button, true, false)
-    
-    control_columns = Gtk::HBox.new(false, ScreencasterGtk::DEFAULT_SPACE) # children have different sizes, spaced by DEFAULT_SPACE
-    
-    @record_pause_button = Gtk::Button.new
-    @record_pause_button.image = RECORD_IMAGE
-    @record_pause_button.sensitive = false
-    @record_pause_button.signal_connect("clicked") {
-      self.record_pause
-    }
-    control_bar.pack_start(@record_pause_button, true, false)
-    
-    # @pause_button = Gtk::Button.new(Gtk::Stock::MEDIA_PAUSE)
-    # @pause_button.sensitive = false
-    # @pause_button.signal_connect("clicked") {
-      # self.pause
-    # }
-    # control_columns.pack_start(@pause_button, true, false)
-    # 
-    @stop_button = Gtk::Button.new
-    @stop_button.image = STOP_IMAGE
-    @stop_button.sensitive = false
-    @stop_button.signal_connect("clicked") {
-      self.stop_recording
-    }
-    control_bar.pack_start(@stop_button, true, false)
-    
-    @cancel_button = Gtk::Button.new
-    @cancel_button.image = CANCEL_IMAGE
-    @cancel_button.sensitive = false
-    @cancel_button.signal_connect("clicked") {
-      self.stop_encoding
-    }
-    control_bar.pack_start(@cancel_button, true, false)
-    
+    @select_button = add_button("Select Window", control_bar) { self.select }
+    @record_pause_button = add_button(RECORD_IMAGE, control_bar) { self.record_pause }
+    @stop_button = add_button(STOP_IMAGE, control_bar) { self.stop_recording }
+    @cancel_button = add_button(CANCEL_IMAGE, control_bar) { self.stop_encoding }
     if File.executable? SOUND_SETTINGS
-      @sound_settings_button = Gtk::Button.new "Sound"
       # There appears to be no stock icon for someting like a volume control.
       #@sound_settings_button.image = AUDIO_VOLUME_MEDIUM
-      @sound_settings_button.sensitive = true
-      @sound_settings_button.signal_connect("clicked") {
+      @sound_settings_button = add_button("Sound", control_bar, true) {
         Thread.new { `#{SOUND_SETTINGS} sound` }
       }
-      control_bar.pack_start(@sound_settings_button, true, false)
     end
-    
-    control_row = Gtk::VBox.new(false, ScreencasterGtk::DEFAULT_SPACE) # children have different sizes, spaced by DEFAULT_SPACE
-    control_row.pack_start(control_bar, true, false)
+    add_button(QUIT_IMAGE, control_bar, true) { self.quit }
     
     columns = Gtk::HBox.new(false, ScreencasterGtk::DEFAULT_SPACE)
     @progress_bar = Gtk::ProgressBar.new
@@ -128,8 +81,8 @@ class ScreencasterGtk
     progress_row.pack_start(columns, true, false)
     
     the_box = Gtk::VBox.new(false, ScreencasterGtk::DEFAULT_SPACE)
-    the_box.pack_end(progress_row, false, false)
-    the_box.pack_end(control_row, false, false)
+    the_box.pack_end(progress_bar, false, false)
+    the_box.pack_end(control_bar, false, false)
     
     @window.add(the_box)
 
@@ -516,6 +469,18 @@ screencaster [OPTION] ...
     }
     
     $logger = ScreencasterGtk::LOGGER # TODO: Fix logging
+  end
+  
+  # Helper functions
+  private
+  def add_button(label, box, sensitive = false, &callback)
+    b = Gtk::Button.new
+    b.image = label if label.is_a? Gtk::Image
+    b.label = label if label.is_a? String
+    b.sensitive = sensitive
+    b.signal_connect("clicked") { callback.call }
+    box.pack_start(b, true, false)
+    b
   end
 end
 
