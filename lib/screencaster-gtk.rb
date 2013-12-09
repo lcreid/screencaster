@@ -19,7 +19,8 @@ class ScreencasterGtk
   # Set up logging. Keep 5 log files of 100K each
   log_dir = File.join(SCREENCASTER_DIR, 'log')
   FileUtils.mkpath log_dir
-  LOGGER = Logger.new(File.join(log_dir, 'screencaster.log'), 5, 100000)
+  LOGFILE = File.join(log_dir, 'screencaster.log')
+  LOGGER = Logger.new(LOGFILE, 5, 100000)
   LOGGER.level = Logger::DEBUG
   
   PIDFILE = File.join(SCREENCASTER_DIR, "run", "screencaster.pid")
@@ -81,21 +82,16 @@ class ScreencasterGtk
     progress_row.pack_start(columns, true, false)
     
     the_box = Gtk::VBox.new(false, ScreencasterGtk::DEFAULT_SPACE)
-    the_box.pack_end(progress_bar, false, false)
+    the_box.pack_end(progress_row, false, false)
     the_box.pack_end(control_bar, false, false)
     
     @window.add(the_box)
 
     ##### Done Creating Main Window
     
-    #### Accelerator Group
-    group = Gtk::AccelGroup.new
-    group.connect(Gdk::Keyval::GDK_N, Gdk::Window::CONTROL_MASK|Gdk::Window::MOD1_MASK, Gtk::ACCEL_VISIBLE) do
-      #puts "You pressed 'Ctrl+Alt+n'"
-    end
-
     #### Pop up menu on right click
-
+    group = Gtk::AccelGroup.new
+    
     @select = Gtk::ImageMenuItem.new("Select Window")
     @select.signal_connect('activate'){self.select}
 
@@ -205,6 +201,7 @@ class ScreencasterGtk
     recording
     @capture_window.record { |percent, time_elapsed| 
       @progress_bar.text = time_elapsed
+      @progress_bar.pulse
       LOGGER.debug "Did elapsed time: #{time_elapsed}"
     }
   end
@@ -226,7 +223,7 @@ class ScreencasterGtk
         @progress_bar.fraction = percent 
         @progress_bar.text = time_remaining
         LOGGER.debug "Did progress #{percent.to_s} time remaining: #{time_remaining}"
-        percent < 1 || stop_encoding
+        not_encoding if percent >= 1
       }
       LOGGER.debug "Back from encode"
     }
@@ -267,6 +264,8 @@ class ScreencasterGtk
       LOGGER.error "#{__FILE__} #{__LINE__}: Can't happen (state #{@capture_window.state})."
     end
   end
+  
+  ##### Methods to set sensitivity of controls
   
   def recording
     self.status_icon.stock = Gtk::Stock::MEDIA_PAUSE
@@ -353,7 +352,7 @@ class ScreencasterGtk
   # The hot key toggles between capture and pause. 
   # The default hot key is Ctrl+Alt+S.
   def main
-    LOGGER.info "Starting"
+    LOGGER.info "Starting event loop"
     self.not_recording
     self.show_all_including_status
     Gtk.main
@@ -481,6 +480,21 @@ screencaster [OPTION] ...
     b.signal_connect("clicked") { callback.call }
     box.pack_start(b, true, false)
     b
+  end
+  
+  def error_dialog_tell_about_log(file = nil, line = nil)
+    msg = "Internal Error"
+    msg = msg + "in #{file}, line: #{line}" if (!file.nil? && !line.nil?)
+    LOGGER.warn(msg)
+    
+    msg = "\nLook in #{LOGFILE} for further information"
+    d = Gtk::MessageDialog.new(@window, 
+      Gtk::Dialog::DESTROY_WITH_PARENT, 
+      Gtk::MessageDialog::WARN, 
+      Gtk::MessageDialog::BUTTONS_CLOSE, 
+      msg)
+    d.run
+    d.destroy
   end
 end
 
