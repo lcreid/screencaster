@@ -14,6 +14,10 @@ class TestCapture < Test::Unit::TestCase
     "#{msg}\n"
   end
   
+  def setup
+    Thread.abort_on_exception = true
+  end
+  
   def file_name(f)
     File.join(TEST_FILE_PATH, f)
   end
@@ -24,10 +28,8 @@ class TestCapture < Test::Unit::TestCase
     input = [ file_name("a.mkv"), file_name("b.mkv") ]
     
     c = Capture.new
-    t = c.merge(output, input)
-    # Should have something going in the background here.
-    assert_equal "run", t.status
-    assert_equal 0, t.value.exitstatus
+    $logger.debug "test_merge_two_files: before merge"
+    assert_equal 0, c.merge(output, input)
     assert File.exists?(output), "Output file #{output} not found."
     assert_equal 1, Thread.list.size
   end
@@ -38,14 +40,11 @@ class TestCapture < Test::Unit::TestCase
     input = [ file_name("a.mkv") ]
     
     c = Capture.new
-    t = c.merge(output, input)
-    assert_equal 0, t.value.exitstatus
-    # Should have something going in the background here, but it happens
-    # so fast that it's hard to catch it. Since the two file case checks,
-    # I won't bother here.
+    assert_equal 0, c.merge(output, input)
     assert File.exists?(output), "Output file #{output} not found."
     assert File.exists?(input[0]), "Input file #{input[0]} gone."
     # Process should be gone by now
+    Thread.list.each { |t| puts t }
     assert_equal 1, Thread.list.size
   end
   
@@ -56,12 +55,11 @@ class TestCapture < Test::Unit::TestCase
     
     amount_done = 0.0
     c = Capture.new
-    t = c.merge(output, input) do | fraction, message |
+    r = c.merge(output, input) do | fraction, message |
         puts "+++++++++++++++++ #{fraction}, #{message}"
       amount_done = fraction
     end
-    $logger.debug "Thread from c.merge: #{t}"
-    assert_equal 0, t.value.exitstatus
+    assert_equal 0, r
     assert_equal 1.0, amount_done
     assert_equal 1, Thread.list.size
   end
@@ -76,13 +74,8 @@ class TestCapture < Test::Unit::TestCase
     FileUtils.cp(file_name(File.join("baseline", i)), input)
     
     c = Capture.new
-    t = c.final_encode(output, input)
-    assert_equal "run", t.status
-    assert_equal 0, t.value.exitstatus
+    assert_equal 0, c.final_encode(output, input)
     assert File.exists?(output), "Output file #{output} not found."
-    assert_raise Errno::ECHILD do
-      Process.wait(c.pid)
-    end
     `diff #{baseline} #{output}`
     assert_equal 0, $?.exitstatus, "Output file different from baseline"
     assert_equal 1, Thread.list.size
@@ -91,9 +84,7 @@ class TestCapture < Test::Unit::TestCase
   def test_record_failure
     # This will fail since the capture area isn't set up
     c = Capture.new
-    t = c.record
-    assert_equal "run", t.status
-    assert_not_equal 0, t.value.exitstatus
+    assert_not_equal 0, c.record
     assert_equal 1, Thread.list.size
   end
   
@@ -103,9 +94,7 @@ class TestCapture < Test::Unit::TestCase
     input = [ file_name("file-does-not-exist.mkv") ]
     
     c = Capture.new
-    t = c.merge(output, input)
-    assert_equal "run", t.status
-    assert_not_equal 0, t.value.exitstatus
+    assert_not_equal 0, c.merge(output, input)
     assert_equal 1, Thread.list.size
   end
   
@@ -118,9 +107,7 @@ class TestCapture < Test::Unit::TestCase
     input = file_name(i)
     
     c = Capture.new
-    t = c.final_encode(output, input)
-    assert_equal "run", t.status
-    assert_not_equal 0, t.value.exitstatus
+    assert_not_equal 0, c.final_encode(output, input)
     assert_equal 1, Thread.list.size
   end
   

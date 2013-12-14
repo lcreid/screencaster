@@ -10,16 +10,17 @@ class Capture
   
   attr_writer :left, :top, :right, :bottom
   attr_reader :state
-  attr :pid
-  attr :tmp_files
+  attr_accessor :pid
+  attr_accessor :tmp_files
 
-  attr :capture_fps
-  attr :encode_fps
-  attr :capture_vcodec 
-  attr :qscale
-  attr :encode_vcodec
-  attr :acodec
-  attr :audio_sample_frequency
+  attr_accessor :capture_fps
+  attr_accessor :encode_fps
+  attr_accessor :capture_vcodec 
+  attr_accessor :qscale
+  attr_accessor :encode_vcodec
+  attr_accessor :acodec
+  attr_accessor :audio_sample_frequency
+  attr_accessor :audio_input
   
   
   def initialize
@@ -32,6 +33,7 @@ class Capture
     #$logger.debug "@exit_chain: #{@exit_chain.to_s}"
     
     @state = :stopped
+    @coprocess = nil
     
     @capture_fps = 30
     @encode_fps = 30 # Don't use this. Just copy through
@@ -40,6 +42,18 @@ class Capture
     @encode_vcodec = 'libx264'
     @acodec = 'aac' # Youtube prefers "AAC-LC" but I don't see one called "-LC"
     @audio_sample_frequency = "48k"
+    @audio_input = "pulse"
+  end
+  
+  def wait
+    $logger.debug "wait: Current thread #{Thread.current}"
+    @coprocess.value
+  end
+  
+  def status
+    $logger.debug "status: Current thread #{Thread.current}"
+    return false if @coprocess.nil?
+    @coprocess.status
   end
   
   def current_tmp_file
@@ -115,7 +129,7 @@ class Capture
     output_file = self.new_tmp_file
 
     @state = :recording
-    audio_options="-f alsa -ac 1 -ab #{@audio_sample_frequency} -i pulse -acodec #{acodec}"
+    audio_options="-f alsa -ac 1 -ab #{@audio_sample_frequency} -i #{@audio_input} -acodec #{@acodec}"
     
     # And i should probably popen here, save the pid, then fork and start
     # reading the input, updating the number of frames saved, or the time
@@ -137,23 +151,22 @@ class Capture
     $logger.debug cmd_line
 
     duration = 0.0
-    Thread.new do
-      Open3.popen2e(cmd_line) do | i, oe, t |
-        @pid = t.pid
-      
-        while line = oe.gets("\r")
-          $logger.debug "****" + line
-          if (line =~ /time=([0-9]*\.[0-9]*)/)
-            duration = $1.to_f
-            $logger.debug "Recording about to yield #{self.total_amount + duration}"
-            yield 0.0, ProgressTracker::format_seconds(self.total_amount + duration) if block_given?
-          end
-        end
-        self.total_amount += duration
-        yield 0.0, ProgressTracker::format_seconds(self.total_amount) if block_given?
-        t.value
+    i, oe, @coprocess = Open3.popen2e(cmd_line)
+    $logger.debug "record: co-process started #{@coprocess}"
+    @pid = @coprocess.pid
+  
+    while line = oe.gets("\r")
+      $logger.debug "****" + line
+      if (line =~ /time=([0-9]*\.[0-9]*)/)
+        duration = $1.to_f
+        $logger.debug "Recording about to yield #{self.total_amount + duration}"
+        yield 0.0, ProgressTracker::format_seconds(self.total_amount + duration) if block_given?
       end
     end
+    self.total_amount += duration
+    yield 1.0, ProgressTracker::format_seconds(self.total_amount) if block_given?
+    $logger.debug "Leaving record"
+    @coprocess.value
   end
   
   def stop_recording
@@ -189,9 +202,8 @@ class Capture
     $logger.debug "Encoding #{Capture.format_input_files_for_mkvmerge(@tmp_files)}...\n"
     $logger.debug("Total duration #{self.total_amount.to_s}")
 
-    t = self.merge(Capture.tmp_file_name, @tmp_files)
-    t.value
-    self.final_encode(output_file, Capture.tmp_file_name, feedback)
+    merge(Capture.tmp_file_name, @tmp_files, feedback)
+    final_encode(output_file, Capture.tmp_file_name, feedback)
   end 
   
   # This is ugly.
@@ -210,33 +222,25 @@ class Capture
     else
       cmd_line = "mkvmerge -v -o #{output_file} #{Capture.format_input_files_for_mkvmerge(input_files)}"
     end
-    $logger.debug "Merge command line: #{cmd_line}"
-    Thread.new do
-      Open3.popen2e(cmd_line) do | i, oe, t |
-        $logger.debug "Thread from popen2e: #{t}"
-        @pid = t.pid
-        $logger.debug "@pid: #{@pid.to_s}"
-      
-        $logger.debug "Thread from Thread.new: #{t}"
-        # $logger.debug "Sleeping..."
-        # sleep 2
-        # $logger.debug "Awake!"
-        while l = oe.gets do
-          # TODO: Lots for duplicate code in this line to clean up.
-          if block_given? 
-            yield 0.5, ""
-          else
-            feedback.call 0.5, ""
-          end
-        end
-        if block_given?
-          yield 1.0, "Done"
-        else
-          feedback.call 1.0, "Done"
-        end
-        t.value
+    $logger.debug "merge: command line: #{cmd_line}"
+    i, oe, @coprocess = Open3.popen2e(cmd_line)
+    $logger.debug "merge: Thread from popen2e: #{@coprocess}"
+    @pid = @coprocess.pid
+    $logger.debug "@pid: #{@pid.to_s}"
+    while l = oe.gets do
+      # TODO: Lots of duplicate code in this line to clean up.
+      if block_given? 
+        yield 0.5, "Merging..."
+      else
+        feedback.call 0.5, "Merging..."
       end
     end
+    if block_given?
+      yield 1.0, "Done"
+    else
+      feedback.call 1.0, "Done"
+    end
+    @coprocess.value
   end
   
   def final_encode(output_file, input_file, feedback = proc {} )
@@ -252,27 +256,23 @@ class Capture
       
     $logger.debug cmd_line
     
-    Thread.new do
-      Open3.popen2e(cmd_line) do | i, oe, t |
-        @pid = t.pid
-        # Process.detach(@pid)
+    i, oe, @coprocess = Open3.popen2e(cmd_line)
+    @pid = @coprocess.pid
 
-        while (line = oe.gets("\r"))
-          $logger.debug "****" + line
-          if (line =~ /time=([0-9]*\.[0-9]*)/) 
-            $logger.debug '******' + $1
-            self.current_amount = $1.to_f
-          end
-          $logger.debug "******** #{self.current_amount} #{self.fraction_complete}"
-          feedback.call self.fraction_complete, self.time_remaining_s
-        end
-        $logger.debug "reached end of file"
-        @state = :stopped
-        self.fraction_complete = 1
-        feedback.call self.fraction_complete, self.time_remaining_s
-        t.value # A little bit of a head game here. Either return this, or maybe have to do t.value.value in caller
+    while (line = oe.gets("\r"))
+      $logger.debug "****" + line
+      if (line =~ /time=([0-9]*\.[0-9]*)/) 
+        $logger.debug '******' + $1
+        self.current_amount = $1.to_f
       end
+      $logger.debug "******** #{self.current_amount} #{self.fraction_complete}"
+      feedback.call self.fraction_complete, self.time_remaining_s
     end
+    $logger.debug "reached end of file"
+    @state = :stopped
+    self.fraction_complete = 1
+    feedback.call self.fraction_complete, self.time_remaining_s
+    @coprocess.value # A little bit of a head game here. Either return this, or maybe have to do t.value.value in caller
   end
   
   def stop_encoding

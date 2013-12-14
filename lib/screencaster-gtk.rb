@@ -11,8 +11,10 @@ require "screencaster-gtk/savefile"
 A program to capture screencasts -- video from monitor and sound from microphone
 =end
 class ScreencasterGtk
+  attr_reader :capture_window
+  
   protected
-  attr_reader :capture_window, :window
+  attr_reader :window
 #  atr_writer :status_icon
     
   SCREENCASTER_DIR = File.join(Dir.home, ".screencaster")
@@ -20,8 +22,8 @@ class ScreencasterGtk
   log_dir = File.join(SCREENCASTER_DIR, 'log')
   FileUtils.mkpath log_dir
   LOGFILE = File.join(log_dir, 'screencaster.log')
-  LOGGER = Logger.new(LOGFILE, 5, 100000)
-  LOGGER.level = Logger::DEBUG
+  @@logger = Logger.new(LOGFILE, 5, 100000)
+  @@logger.level = Logger::DEBUG
   
   PIDFILE = File.join(SCREENCASTER_DIR, "run", "screencaster.pid")
   
@@ -34,26 +36,36 @@ class ScreencasterGtk
   CANCEL_IMAGE = Gtk::Image.new(Gtk::Stock::CANCEL, Gtk::IconSize::SMALL_TOOLBAR)
   QUIT_IMAGE = Gtk::Image.new(Gtk::Stock::QUIT, Gtk::IconSize::SMALL_TOOLBAR)
 
+  public
+    def self.logger
+  @@logger
+  end
+  
+  def self.logger=(log_file)
+    @@logger = Logger.new(log_file, 5, 100000)
+  end
+      
+
   def initialize
     #### Create Main Window
     
-    LOGGER.info "Started"
+    @@logger.info "Started"
     
     @window = Gtk::Window.new("Screencaster")
     @window.signal_connect("delete_event") {
-      LOGGER.debug "delete event occurred"
+      @@logger.debug "delete event occurred"
       #true
       self.quit
       false
     }
     
     @window.signal_connect("destroy") {
-      LOGGER.debug "destroy event occurred"
+      @@logger.debug "destroy event occurred"
     }
     
     # The following gets minimize and restore events, but not iconify and de-iconify 
     @window.signal_connect("window_state_event") { |w, e|
-      LOGGER.debug "window_state_event #{e.to_s}"
+      @@logger.debug "window_state_event #{e.to_s}"
     }
     
     @window.border_width = DEFAULT_SPACE
@@ -162,75 +174,130 @@ class ScreencasterGtk
   #### Done Status Icon
   
   def quit
-    LOGGER.debug "Quitting"
+    @@logger.debug "Quitting"
     # self.status_icon.destroy
-    # LOGGER.debug "After status icon destroy."
+    # @@logger.debug "After status icon destroy."
     # @window.destroy
-    # LOGGER.debug "After window destroy."
+    # @@logger.debug "After window destroy."
     # We don't want to destroy here because the object continues to exist
     # Just hide everything
     self.hide_all_including_status
     # self.status_icon.hide doesn't work/exist
     Gtk.main_quit 
-    LOGGER.debug "After main_quit."
+    @@logger.debug "After main_quit."
   end
   
+  public
   def select
-    LOGGER.debug "Selecting Window"
+    @@logger.debug "Selecting Window"
     @capture_window = Capture.new
     @capture_window.get_window_to_capture
     @record_pause_button.sensitive = true
   end
   
+  protected
   def record_pause
-    LOGGER.debug "Record/Pause state: #{@capture_window.state}"
+    @@logger.debug "Record/Pause state: #{@capture_window.state}"
     case @capture_window.state
     when :recording
-      LOGGER.debug "Record/Pause -- pause"
+      @@logger.debug "Record/Pause -- pause"
       pause
     when :paused, :stopped
-      LOGGER.debug "Record/Pause -- record"
+      @@logger.debug "Record/Pause -- record"
       record
     else
-      LOGGER.error "#{__FILE__} #{__LINE__}: Can't happen (state #{@capture_window.state})."
+      @@logger.error "#{__FILE__} #{__LINE__}: Can't happen (state #{@capture_window.state})."
     end
   end
   
   def record
-    LOGGER.debug "Recording"
+    @@logger.debug "Recording"
     recording
-    @capture_window.record { |percent, time_elapsed| 
-      @progress_bar.text = time_elapsed
-      @progress_bar.pulse
-      LOGGER.debug "Did elapsed time: #{time_elapsed}"
-    }
+    spawn_record
   end
   
   def pause
-    LOGGER.debug "Pausing"
+    @@logger.debug "Pausing"
     paused
     @capture_window.pause_recording
   end
   
+  public
   def stop_recording
-    LOGGER.debug "Stopped"
+    @@logger.debug "Stopped"
     not_recording
     @capture_window.stop_recording
     
     SaveFile.get_file_to_save { |filename|
       encoding
-      @capture_window.encode(filename) { |percent, time_remaining| 
-        @progress_bar.fraction = percent 
-        @progress_bar.text = time_remaining
-        LOGGER.debug "Did progress #{percent.to_s} time remaining: #{time_remaining}"
-        not_encoding if percent >= 1
-      }
-      LOGGER.debug "Back from encode"
+      spawn_encode(filename)
+      @@logger.debug "Encode spawned"
     }
   end
   
+=begin rdoc
+Encode in the background. If the background process fails, be able to pop
+up a window. Give feedback by calling the optional block with | fraction, message |.
+=end
+  def spawn_record
+    @background = Thread.new do
+      @capture_window.record do |percent, time_elapsed| 
+        @progress_bar.text = time_elapsed
+        @progress_bar.pulse
+        @@logger.debug "Did elapsed time: #{time_elapsed}"
+      end
+    end
+    @background
+  end
+  
+=begin rdoc
+Encode in the background. If the background process fails, be able to pop
+up a window. Give feedback by calling the optional block with | fraction, message |.
+=end
+  def spawn_encode(filename)
+    @background = Thread.new do
+      @capture_window.encode(filename) do |fraction, time_remaining| 
+        @progress_bar.pulse if fraction == 0
+        @progress_bar.fraction = fraction 
+        @progress_bar.text = time_remaining
+        @@logger.debug "Did progress #{fraction.to_s} time remaining: #{time_remaining}"
+        not_encoding if fraction >= 1
+      end
+    end
+    @background
+  end
+  
+=begin rdoc
+Check how the background process is doing.
+If there is none, or it's running fine, return true.
+If there was a background process but it failed, return false and
+ensure that the user doesn't get another 
+message about the same condition.
+=end
+  def check_background
+    # TODO: Partially implemented so far
+    return true if @background.nil? 
+    return true if @background.status
+    if ! background_exitstatus
+      @background = nil
+      return false
+    end
+    true 
+  end
+  
+  def background_exitstatus
+    return true if @background.nil?
+    @@logger.debug "background_exitstatus: #{@background.value.exitstatus}"
+    [0, 255].any? { | x | x == @background.value.exitstatus }
+  end
+  
+  def idle
+    error_dialog_tell_about_log unless check_background
+  end
+  
+  protected
   def stop_encoding
-    LOGGER.debug "Cancelled encoding"
+    @@logger.debug "Cancelled encoding"
     not_recording
     @capture_window.stop_encoding
   end
@@ -244,12 +311,12 @@ class ScreencasterGtk
     when :stopped
       # Do nothing
     else
-      LOGGER.error "#{__FILE__} #{__LINE__}: Can't happen (state #{@capture_window.state})."
+      @@logger.error "#{__FILE__} #{__LINE__}: Can't happen (state #{@capture_window.state})."
     end
   end
   
   def toggle_recording
-    LOGGER.debug "Toggle recording"
+    @@logger.debug "Toggle recording"
     return if @capture_window.nil?
     case @capture_window.state
     when :recording
@@ -261,7 +328,7 @@ class ScreencasterGtk
     when :stopped
       # Do nothing
     else
-      LOGGER.error "#{__FILE__} #{__LINE__}: Can't happen (state #{@capture_window.state})."
+      @@logger.error "#{__FILE__} #{__LINE__}: Can't happen (state #{@capture_window.state})."
     end
   end
   
@@ -352,11 +419,12 @@ class ScreencasterGtk
   # The hot key toggles between capture and pause. 
   # The default hot key is Ctrl+Alt+S.
   def main
-    LOGGER.info "Starting event loop"
+    @@logger.info "Starting event loop"
     self.not_recording
     self.show_all_including_status
+    GLib::Idle.add { idle }
     Gtk.main
-    LOGGER.info "Finished"
+    @@logger.info "Finished"
   end
   
   # Process command line arguments, set up the log file, and set up hot keys.
@@ -371,18 +439,18 @@ class ScreencasterGtk
     
     output_file = "/home/reid/test-key.log"
     
-    ScreencasterGtk::LOGGER.debug("pid_file is #{PIDFILE}")
+    @@logger.debug("pid_file is #{PIDFILE}")
     
     if File.exists? PIDFILE
       begin
         f = File.new(PIDFILE)
-        ScreencasterGtk::LOGGER.debug("Opened PIDFILE")
+        @@logger.debug("Opened PIDFILE")
         existing_pid = f.gets
         existing_pid = existing_pid.to_i
         f.close
-        ScreencasterGtk::LOGGER.debug("existing_pid = #{existing_pid.to_s}")
+        @@logger.debug("existing_pid = #{existing_pid.to_s}")
       rescue StandardError
-        LOGGER.error("File to read #{PIDFILE}")
+        @@logger.error("File to read #{PIDFILE}")
         exit 1
       end
     else
@@ -410,23 +478,26 @@ screencaster [OPTION] ...
           exit 0
         when '--pause', '--start'
           if existing_pid then
-            ScreencasterGtk::LOGGER.debug("Got a pause for PID #{existing_pid}")
+            @@logger.debug("Got a pause for PID #{existing_pid}")
             begin
               Process.kill "USR1", existing_pid
               exit 0
             rescue SystemCallError
-              LOGGER.info("Got a pause but PID #{existing_pid} didn't exist")
+              @@logger.info("Got a pause but PID #{existing_pid} didn't exist")
               exit 1
             end
           else
-            ScreencasterGtk::LOGGER.info("Got a pause but no PID")
+            @@logger.info("Got a pause but no PID")
             exit 1
           end 
       end
     end
     
     # TODO: Check for running process and if not, ignore PIDFILE.
-    (ScreencasterGtk::LOGGER.debug("Can't run two instances at once."); exit 1) if ! existing_pid.nil?
+    unless existing_pid.nil?
+      error_dialog_tell_about_log("Can't run two instances at once.")
+      exit 1 
+    end
     
     # Add application properties for PulseAudio
     # See: http://www.freedesktop.org/wiki/Software/PulseAudio/Documentation/Developer/Clients/ApplicationProperties/
@@ -437,16 +508,16 @@ screencaster [OPTION] ...
     GLib::setenv("PULSE_PROP_media.role", "video")
 
     @chain = Signal.trap("EXIT") { 
-      LOGGER.debug "In ScreencasterGtk exit handler @chain: #{@chain}"
-      ScreencasterGtk::LOGGER.debug("Exiting")
-      ScreencasterGtk::LOGGER.debug("unlinking") if File.file?(PIDFILE)
+      @@logger.debug "In ScreencasterGtk exit handler @chain: #{@chain}"
+      @@logger.debug("Exiting")
+      @@logger.debug("unlinking") if File.file?(PIDFILE)
       File.unlink(PIDFILE) if File.file?(PIDFILE)
       `gconftool-2 --unset /apps/metacity/keybinding_commands/screencaster_pause`
       `gconftool-2 --unset /apps/metacity/global_keybindings/run_screencaster_pause`
-      LOGGER.debug "About to call next trap with @chain: #{@chain}"
+      @@logger.debug "About to call next trap with @chain: #{@chain}"
       @chain.call unless @chain.nil?
     }
-    LOGGER.debug "ScreencasterGtk.whatever @chain: #{@chain}"
+    @@logger.debug "ScreencasterGtk.whatever @chain: #{@chain}"
 
     `gconftool-2 --set /apps/metacity/keybinding_commands/screencaster_pause --type string "screencaster --pause"`
     `gconftool-2 --set /apps/metacity/global_keybindings/run_screencaster_pause --type string "<Control><Alt>S"`
@@ -456,18 +527,18 @@ screencaster [OPTION] ...
       f = File.new(PIDFILE, "w")
       f.puts(Process.pid.to_s)
       f.close
-      LOGGER.debug("Wrote PID #{Process.pid}")
+      @@logger.debug("Wrote PID #{Process.pid}")
     rescue StandardError
-      LOGGER.error("Failed to write #{PIDFILE}")
+      @@logger.error("Failed to write #{PIDFILE}")
       exit 1
     end
     
     Signal.trap("USR1") { 
-      ScreencasterGtk::LOGGER.debug("Pause/Resume") 
+      @@logger.debug("Pause/Resume") 
       self.toggle_recording
     }
     
-    $logger = ScreencasterGtk::LOGGER # TODO: Fix logging
+    $logger = @@logger # TODO: Fix logging
   end
   
   # Helper functions
@@ -482,17 +553,24 @@ screencaster [OPTION] ...
     b
   end
   
-  def error_dialog_tell_about_log(file = nil, line = nil)
-    msg = "Internal Error"
-    msg = msg + "in #{file}, line: #{line}" if (!file.nil? && !line.nil?)
-    LOGGER.warn(msg)
-    
-    msg = "\nLook in #{LOGFILE} for further information"
+  public
+  def error_dialog_tell_about_log(msg = "", file = nil, line = nil)
     d = Gtk::MessageDialog.new(@window, 
       Gtk::Dialog::DESTROY_WITH_PARENT, 
-      Gtk::MessageDialog::WARN, 
+      Gtk::MessageDialog::WARNING, 
       Gtk::MessageDialog::BUTTONS_CLOSE, 
-      msg)
+      "Internal Error")
+    
+    d.secondary_text = msg
+    d.secondary_text += " in #{file}" unless file.nil?
+    d.secondary_text += ", line: #{line}" unless line.nil?
+    d.secondary_text.strip!
+
+    @@logger.warn(d.secondary_text)
+
+    d.secondary_text += "\nLook in #{LOGFILE} for further information"
+    d.secondary_text.strip!
+    
     d.run
     d.destroy
   end
