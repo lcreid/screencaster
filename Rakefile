@@ -16,20 +16,37 @@ TMPDIR = File.join DESTDIR, "tmp"
 
 GEM = "screencaster-gtk-#{ScreencasterGtk::VERSION}.gem"
 
+=begin
+Modify and test the code
+Build the gem
+Test it locally
+Commit everything -- not sure I want to automate this yet
+Tag the gem part of the tree -- not sure I want to automate this yet
+Push it to rubygems (:release)
+  Rubygems lets me put things are pre-release -- I should use this somehow
+Rev the gem version -- not sure I want to automate this yet
+Build the .deb (:debian)
+Test it locally
+Commit everything -- not sure I want to automate this yet
+Tag the debian part of the tree -- not sure I want to automate this yet
+Push it to ???
+Rev the .deb version -- not sure I want to automate this yet
+=end
+
 # These get clobbered, so they have to be only the files we move, not source files
-DEBIAN_FILES = FileList.new(File.join(TMPDIR, GEM),
-  File.join(MAN1DIR, "screencaster.1.gz"),
+DEBIAN_FILES = FileList.new(File.join(MAN1DIR, "screencaster.1.gz"),
   File.join(DATAROOTDIR, "applications", "screencaster.desktop"),
   File.join(DATAROOTDIR, "pixmaps", "screencaster.svg"))
 
-desc "Create the gem."
+desc "Build the gem."
 task :build => GEM
 
 file GEM => 
   FileList.new("lib/*.rb", 
     "lib/screencaster-gtk/*.rb", 
     "bin/screencaster", 
-    "screencaster-gtk.gemspec") do
+    "screencaster-gtk.gemspec",
+    "Rakefile") do
   system "gem build screencaster-gtk.gemspec"
 end
 
@@ -41,7 +58,8 @@ end
 desc "Build the .deb file"
 task :debian => "screencaster.deb"
 
-file "screencaster.deb" => FileList.new("debian/DEBIAN/*", GEM, DEBIAN_FILES.collect do |f| File.basename f end ) do |t|
+file "screencaster.deb" => :release
+file "screencaster.deb" => FileList.new("debian/DEBIAN/*", DEBIAN_FILES.collect do |f| File.basename f end ) do |t|
   system "rake DESTDIR=debian install" 
   rm Dir.glob("debian/DEBIAN/*~")
   system "fakeroot dpkg-deb --build debian"
@@ -58,7 +76,7 @@ CLEAN.include("screencaster.deb",
   "test/c.mkv",
   "test/test-final-encode.mp4",
   "test/c-from-one.mkv",
-  "test/c-from-one.mkv")
+  "test/c-from-two.mkv")
 CLOBBER.include(DEBIAN_FILES.collect { |f| File.join "debian", f })
 
 DEBIAN_FILES.each do |f|

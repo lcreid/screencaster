@@ -1,4 +1,4 @@
 #!/bin/sh
 
-gem install /tmp/screencaster-gtk*
-rm /tmp/screencaster-gtk*
+gem install screencaster-gtk --pre
+
