@@ -174,7 +174,10 @@ class ScreencasterGtk
   #### Done Status Icon
   
   def quit
-    if 0 < @capture_window.raw_files.size && SaveFile.are_you_sure?(@window)
+    if @capture_window.nil? ||
+      @capture_window.raw_files.nil? ||
+      0 == @capture_window.raw_files.size || 
+      SaveFile.are_you_sure?(@window)
       @@logger.debug "Quitting"
       # We don't want to destroy here because the object continues to exist
       # Just hide everything

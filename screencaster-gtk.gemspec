@@ -24,8 +24,10 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency 'cairo', '~> 1.12', '>= 1.12.6'
   s.add_runtime_dependency 'glib2', '~> 2.0', '>= 2.0.2'
   s.add_runtime_dependency 'gtk2', '~> 2.0', '>= 2.0.2'
-  s.requirements << "avconv"
-  s.requirements << "wmctl"
+  s.requirements << "libav-tools"
   s.requirements << "libavcodec-extra-53"
+  s.requirements << "wmctl"
   s.requirements << "mkvtoolnix"
+  s.requirements << "ruby1.9.1-dev"
+  s.requirements << "libgtk2.0-dev"
 end
