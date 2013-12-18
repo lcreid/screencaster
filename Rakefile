@@ -33,10 +33,11 @@ Push it to ???
 Rev the .deb version -- not sure I want to automate this yet
 =end
 
-# These get clobbered, so they have to be only the files we move, not source files
-DEBIAN_FILES = FileList.new(File.join(MAN1DIR, "screencaster.1.gz"),
+LINUX_FILES = FileList.new(File.join(MAN1DIR, "screencaster.1.gz"),
   File.join(DATAROOTDIR, "applications", "screencaster.desktop"),
   File.join(DATAROOTDIR, "pixmaps", "screencaster.svg"))
+# These get clobbered, so they have to be only the files we move, not source files
+DEBIAN_FILES = LINUX_FILES.collect do |f| File.join("debian", f) end
 
 desc "Build the gem."
 task :build => GEM
@@ -59,8 +60,7 @@ desc "Build the .deb file"
 task :debian => "screencaster.deb"
 
 file "screencaster.deb" => :release
-file "screencaster.deb" => FileList.new("debian/DEBIAN/*", DEBIAN_FILES.collect do |f| File.basename f end ) do |t|
-  system "rake DESTDIR=debian install" 
+file "screencaster.deb" => FileList.new("debian/DEBIAN/*", DEBIAN_FILES) do |t|
   rm Dir.glob("debian/DEBIAN/*~")
   system "fakeroot dpkg-deb --build debian"
   mv "debian.deb", t.name
@@ -68,7 +68,9 @@ file "screencaster.deb" => FileList.new("debian/DEBIAN/*", DEBIAN_FILES.collect 
 end
 
 desc "Install the files, like a GNU makefile would install them."
-task :install => DEBIAN_FILES
+task :install => LINUX_FILES do
+  system "gem install screencaster-gtk --pre"
+end
 
 CLEAN.include("screencaster.deb", 
   GEM, 
@@ -77,10 +79,11 @@ CLEAN.include("screencaster.deb",
   "test/test-final-encode.mp4",
   "test/c-from-one.mkv",
   "test/c-from-two.mkv")
-CLOBBER.include(DEBIAN_FILES.collect { |f| File.join "debian", f })
+CLOBBER.include(DEBIAN_FILES)
 
 DEBIAN_FILES.each do |f|
   file f => File.basename(f) do |target|
+    mkdir_p File.dirname(target.name)
     cp target.prerequisites.first, target.name
   end
 end
