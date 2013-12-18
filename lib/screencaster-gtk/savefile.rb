@@ -23,7 +23,7 @@ Create the file chooser dialogue with a default file name.
   end
   
 =begin rdoc
-Do the workflow around saving a file, warning the user before allow
+Do the workflow around saving a file, warning the user before allowing
 them to abandon their capture.
 =end
   def self.get_file_to_save
@@ -38,10 +38,12 @@ them to abandon their capture.
         self.confirm_cancel(@dialog)
         @dialog.hide
       else
-        LOGGER.error("Can't happen #{__FILE__} line: #{__LINE__}")
+        $logger.error("Can't happen #{__FILE__} line: #{__LINE__}")
         @dialog.hide
     end
   end
+  
+  # TODO: I think it's ugly that I have two different dialogues here.
   
 =begin rdoc
 Confirm cancellation when the user has captured something but not
@@ -74,6 +76,20 @@ saved it.
         self.get_file_to_save
       else
     end
+  end
+  
+  def self.are_you_sure?(parent, verb = "quit")
+    d = Gtk::MessageDialog.new(parent, 
+      Gtk::Dialog::DESTROY_WITH_PARENT, 
+      Gtk::MessageDialog::QUESTION, 
+      Gtk::MessageDialog::BUTTONS_YES_NO, 
+      "You have unsaved work")
+    
+    d.secondary_text = "If you #{verb} now, you will lose some video that you have captured. Are you sure you want to #{verb}?"
+
+    response = d.run
+    d.destroy
+    response == Gtk::Dialog::RESPONSE_YES
   end
 end
 

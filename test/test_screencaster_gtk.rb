@@ -41,6 +41,7 @@ class TestScreencasterGtk < Test::Unit::TestCase
     # Uses the test definition of select defined in the local version of capture.rb
     @sc.select
     @sc.capture_window.tmp_files = [file_name("a.mkv")]
+    @sc.capture_window.total_amount = 1
     assert @sc.spawn_encode(output), "spawn_encode failed"
     assert @sc.check_background, "check_background failed"
     assert @sc.background_exitstatus, "Unexpected background failure"

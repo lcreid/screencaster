@@ -174,17 +174,15 @@ class ScreencasterGtk
   #### Done Status Icon
   
   def quit
-    @@logger.debug "Quitting"
-    # self.status_icon.destroy
-    # @@logger.debug "After status icon destroy."
-    # @window.destroy
-    # @@logger.debug "After window destroy."
-    # We don't want to destroy here because the object continues to exist
-    # Just hide everything
-    self.hide_all_including_status
-    # self.status_icon.hide doesn't work/exist
-    Gtk.main_quit 
-    @@logger.debug "After main_quit."
+    if 0 < @capture_window.raw_files.size && SaveFile.are_you_sure?(@window)
+      @@logger.debug "Quitting"
+      # We don't want to destroy here because the object continues to exist
+      # Just hide everything
+      self.hide_all_including_status
+      # self.status_icon.hide doesn't work/exist
+      Gtk.main_quit 
+      @@logger.debug "After main_quit."
+    end
   end
   
   public

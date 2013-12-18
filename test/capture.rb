@@ -11,5 +11,11 @@ class Capture
 
     $logger.debug "Capturing #{@left},#{@top} to #{@left+@width},#{@top+@height}. Dimensions #{@width},#{@height}.\n"
   end
+  
+  def define_mock_capture_success
+    def self.record_command_line(output_file)
+      "touch '#{output_file}'"
+    end
+  end
 end
 

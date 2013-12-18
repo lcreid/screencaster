@@ -2,26 +2,15 @@ require 'test/unit'
 require 'screencaster-gtk/capture'
 require 'logger'
 require 'fileutils'
+require File.join(File.expand_path(File.dirname(__FILE__)), 'test_utils')
+require File.join(File.expand_path(File.dirname(__FILE__)), 'capture')
 
 # TODO: How to test the actual capture?
 # There's non-trivial stuff in there, like getting the overall duration.
 
 class TestCapture < Test::Unit::TestCase
-  TEST_FILE_PATH = File.dirname(__FILE__)
-  
-  $logger = Logger.new(STDOUT)
-  $logger.formatter = proc do |severity, datetime, progname, msg|
-    "#{msg}\n"
-  end
-  
-  def setup
-    Thread.abort_on_exception = true
-  end
-  
-  def file_name(f)
-    File.join(TEST_FILE_PATH, f)
-  end
-  
+  include TestUtils
+
   def test_merge_two_files
     output = file_name("c-from-two.mkv")
     File.delete(output) if File.exists?(output)
@@ -74,6 +63,7 @@ class TestCapture < Test::Unit::TestCase
     FileUtils.cp(file_name(File.join("baseline", i)), input)
     
     c = Capture.new
+    c.total_amount = 1.0
     assert_equal 0, c.final_encode(output, input)
     assert File.exists?(output), "Output file #{output} not found."
     `diff #{baseline} #{output}`
@@ -107,13 +97,14 @@ class TestCapture < Test::Unit::TestCase
     input = file_name(i)
     
     c = Capture.new
+    c.total_amount = 1.0
     assert_not_equal 0, c.final_encode(output, input)
     assert_equal 1, Thread.list.size
   end
   
   def test_default_total
     c = Capture.new
-    assert_equal 1.0, c.total_amount
+    assert_equal 0.0, c.total_amount
   end
   
   def test_total
@@ -124,6 +115,7 @@ class TestCapture < Test::Unit::TestCase
   
   def test_current
     c = Capture.new
+    c.total_amount = 1.0
     c.current_amount = 0.25
     assert_equal 0.25, c.current_amount
     assert_equal 0.25, c.fraction_complete
@@ -135,6 +127,7 @@ class TestCapture < Test::Unit::TestCase
   
   def test_time_remaining
     c = Capture.new
+    c.total_amount = 1.0
     c.start_time = Time.new
     c.current_amount = 0.25
     assert_in_delta(0.1, 0.1, c.time_remaining)
@@ -144,12 +137,14 @@ class TestCapture < Test::Unit::TestCase
   
   def test_time_remaining_none_done_yet
     c = Capture.new
+    c.total_amount = 1.0
     c.start_time = Time.new
     assert_in_delta(0.1, 0.1, c.time_remaining)
   end
   
   def test_time_remaining_s
     c = Capture.new
+    c.total_amount = 1.0
     c.current_amount = 0.5
     c.start_time = Time.new - 3661
     assert_equal("1h 01m 01s remaining", c.time_remaining_s)
@@ -165,6 +160,21 @@ class TestCapture < Test::Unit::TestCase
   
   def test_format_seconds
     assert_equal "1h 01m 01s", Capture::ProgressTracker.format_seconds(3661) 
+  end
+  
+  def test_record_with_mock
+    c = Capture.new
+    c.get_window_to_capture
+    c.define_mock_capture_success
+    assert_equal 0, c.record.exitstatus
+    assert File.exists?("/tmp/screencaster_#{$$}_#{"%04d" % 0}.mkv"), "Record didn't create output file"
+    assert_equal 1, c.video_segments_size
+    assert_equal 0, c.record.exitstatus
+    assert File.exists?("/tmp/screencaster_#{$$}_#{"%04d" % 1}.mkv"), "Record didn't create output file"
+    assert_equal 2, c.video_segments_size
+    c.reset
+    assert_equal 0, c.video_segments_size
+    assert_equal 0, Dir.glob("/tmp/screencaster_#{$$}*").size
   end
 end
 

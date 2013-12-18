@@ -11,7 +11,7 @@ class Capture
   attr_writer :left, :top, :right, :bottom
   attr_reader :state
   attr_accessor :pid
-  attr_accessor :tmp_files
+  attr_accessor :raw_files
 
   attr_accessor :capture_fps
   attr_accessor :encode_fps
@@ -24,13 +24,14 @@ class Capture
   
   
   def initialize
-    @tmp_files = []
     @exit_chain = Signal.trap("EXIT") { 
       self.cleanup
       $logger.debug "In capture about to chain to trap @exit_chain: #{@exit_chain}"
       @exit_chain.call unless @exit_chain.nil? 
     }
     #$logger.debug "@exit_chain: #{@exit_chain.to_s}"
+
+    self.reset_without_cleanup
     
     @state = :stopped
     @coprocess = nil
@@ -57,11 +58,11 @@ class Capture
   end
   
   def current_tmp_file
-    @tmp_files.last
+    @raw_files.last
   end
   
   def new_tmp_file
-    @tmp_files << Capture.tmp_file_name(@tmp_files.size)
+    @raw_files << Capture.tmp_file_name(@raw_files.size)
     self.current_tmp_file
   end
   
@@ -71,6 +72,10 @@ class Capture
   
   def self.format_input_files_for_mkvmerge(files)
     files.drop(1).inject("\"#{files.first}\"") {|a, b| "#{a} + \"#{b}\"" }
+  end
+  
+  def video_segments_size
+    @raw_files.size
   end
     
   def width
@@ -121,32 +126,16 @@ class Capture
   end
   
   def record
-    if @state != :paused
-      @tmp_files = [] 
-      self.total_amount = 0.0
-    end
-
     output_file = self.new_tmp_file
 
     @state = :recording
-    audio_options="-f alsa -ac 1 -ab #{@audio_sample_frequency} -i #{@audio_input} -acodec #{@acodec}"
     
     # And i should probably popen here, save the pid, then fork and start
     # reading the input, updating the number of frames saved, or the time
     # recorded.
     $logger.debug "Capturing...\n"
 
-    cmd_line = "avconv \
-      #{audio_options} \
-      -f x11grab \
-      -show_region 1 \
-      -r #{@capture_fps} \
-      -s #{@width}x#{@height} \
-      -i :0.0+#{@left},#{@top} \
-      -qscale #{@qscale} \
-      -vcodec #{@capture_vcodec} \
-      -y \
-      #{output_file}"
+    cmd_line = record_command_line(output_file)
     
     $logger.debug cmd_line
 
@@ -199,29 +188,19 @@ class Capture
     state = :encoding
     output_file =~ /.mp4$/ || output_file += ".mp4"
     
-    $logger.debug "Encoding #{Capture.format_input_files_for_mkvmerge(@tmp_files)}...\n"
+    $logger.debug "Encoding #{Capture.format_input_files_for_mkvmerge(@raw_files)}...\n"
     $logger.debug("Total duration #{self.total_amount.to_s}")
 
-    merge(Capture.tmp_file_name, @tmp_files, feedback)
+    merge(Capture.tmp_file_name, @raw_files, feedback)
     final_encode(output_file, Capture.tmp_file_name, feedback)
   end 
-  
-  # This is ugly.
-  # When you open co-processes, they do get stuck together.
-  # It seems the if I don't read what's coming out of the co-process, it waits.
-  # But if I read it, then it goes right to the end until it returns.
   
   def merge(output_file, input_files, feedback = proc {} )
     $logger.debug("Merging #{input_files.size.to_s} files: #{Capture.format_input_files_for_mkvmerge(input_files)}")
     $logger.debug("Feedback #{feedback}")
     
-    # TODO: cp doesn't give feedback like mkvmerge does...
-    if input_files.size == 1
-      cmd_line = "cp -v #{input_files[0]} #{output_file}"
-      #cmd_line = "sleep 5"
-    else
-      cmd_line = "mkvmerge -v -o #{output_file} #{Capture.format_input_files_for_mkvmerge(input_files)}"
-    end
+    cmd_line = merge_command_line(output_file, input_files)
+    
     $logger.debug "merge: command line: #{cmd_line}"
     i, oe, @coprocess = Open3.popen2e(cmd_line)
     $logger.debug "merge: Thread from popen2e: #{@coprocess}"
@@ -248,11 +227,7 @@ class Capture
     # updating progress based on what I read, while the main body
     # returns and carries on.
     
-    cmd_line = "avconv \
-      -i #{input_file} \
-      -vcodec #{@encode_vcodec} \
-      -y \
-      '#{output_file}'"
+    cmd_line = encode_command_line(output_file, input_file)
       
     $logger.debug cmd_line
     
@@ -271,7 +246,8 @@ class Capture
     $logger.debug "reached end of file"
     @state = :stopped
     self.fraction_complete = 1
-    feedback.call self.fraction_complete, self.time_remaining_s
+    feedback.call self.fraction_complete, "Done"
+    reset
     @coprocess.value # A little bit of a head game here. Either return this, or maybe have to do t.value.value in caller
   end
   
@@ -282,10 +258,53 @@ class Capture
       $logger.error("No encoding to stop.")
     end
   end
+  
+  def reset
+    cleanup
+    reset_without_cleanup
+  end
+  
+  def reset_without_cleanup
+    @raw_files = [] 
+    self.total_amount = 0.0
+  end
 
   def cleanup
-    @tmp_files.each { |f| File.delete(f) if File.exists?(f) }
+    @raw_files.each { |f| File.delete(f) if File.exists?(f) }
     File.delete(Capture.tmp_file_name) if File.exists?(Capture.tmp_file_name)
+  end
+  
+  def record_command_line(output_file)
+    audio_options="-f alsa -ac 1 -ab #{@audio_sample_frequency} -i #{@audio_input} -acodec #{@acodec}"
+    "avconv \
+      #{audio_options} \
+      -f x11grab \
+      -show_region 1 \
+      -r #{@capture_fps} \
+      -s #{@width}x#{@height} \
+      -i :0.0+#{@left},#{@top} \
+      -qscale #{@qscale} \
+      -vcodec #{@capture_vcodec} \
+      -y \
+      #{output_file}"
+  end
+  
+  def merge_command_line(output_file, input_files)
+    # TODO: cp doesn't give feedback like mkvmerge does...
+    if input_files.size == 1
+      "cp -v #{input_files[0]} #{output_file}"
+      #cmd_line = "sleep 5"
+    else
+      "mkvmerge -v -o #{output_file} #{Capture.format_input_files_for_mkvmerge(input_files)}"
+    end
+  end
+  
+  def encode_command_line(output_file, input_file)
+    "avconv \
+      -i '#{input_file}' \
+      -vcodec #{@encode_vcodec} \
+      -y \
+      '#{output_file}'"
   end
 end
 

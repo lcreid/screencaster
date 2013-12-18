@@ -10,6 +10,7 @@ module ProgressTracker
   end
   
   def fraction_complete
+    raise ZeroDivisionError if self.total_amount == 0
     [ self.current_amount.to_f / self.total_amount.to_f, 1.0 ].min
   end
     
@@ -27,7 +28,7 @@ module ProgressTracker
   end
   
   def total_amount
-    @total_amount || 1.0
+    @total_amount || 0.0
   end
   
   def time_remaining
