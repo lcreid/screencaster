@@ -14,6 +14,7 @@ Gem::Specification.new do |s|
     "lib/screencaster-gtk/capture.rb", 
     "lib/screencaster-gtk/progresstracker.rb"
     ]
+  s.test_files = Dir.glob('test/*.rb')
   s.homepage    =
     'http://github.org/lcreid/screencaster'
   s.license     = 'GPL2'
