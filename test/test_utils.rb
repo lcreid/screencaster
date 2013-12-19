@@ -14,4 +14,10 @@ module TestUtils
   def baseline_file_name(f)
     file_name(File.join('baseline', f))
   end
+  
+  def copy_baseline_file_to_test_directory(f)
+    target = file_name(f)
+    FileUtils.cp(file_name(File.join("baseline", f)), target)
+    target
+  end
 end

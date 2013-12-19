@@ -287,7 +287,6 @@ ensure that the user doesn't get another
 message about the same condition.
 =end
   def check_background
-    # TODO: Partially implemented so far
     return true if @background.nil? 
     return true if @background.status
     if ! background_exitstatus

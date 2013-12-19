@@ -72,7 +72,9 @@ task :install => LINUX_FILES do
   system "gem install screencaster-gtk --pre"
 end
 
-CLEAN.include("test/c.mkv",
+CLEAN.include("test/a.mkv",
+  "test/b.mkv",
+  "test/c.mkv",
   "test/test-final-encode.mp4",
   "test/c-from-one.mkv",
   "test/c-from-two.mkv",

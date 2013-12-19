@@ -14,8 +14,7 @@ class TestCapture < Test::Unit::TestCase
   def test_merge_two_files
     output = file_name("c-from-two.mkv")
     File.delete(output) if File.exists?(output)
-    input = [ file_name("a.mkv"), file_name("b.mkv") ]
-    
+    input = [ "a.mkv", "b.mkv" ].collect { |f| copy_baseline_file_to_test_directory(f) }
     c = Capture.new
     $logger.debug "test_merge_two_files: before merge"
     assert_equal 0, c.merge(output, input)
@@ -26,7 +25,7 @@ class TestCapture < Test::Unit::TestCase
   def test_merge_one_file
     output = file_name("c-from-one.mkv")
     File.delete(output) if File.exists?(output)
-    input = [ file_name("a.mkv") ]
+    input = [ copy_baseline_file_to_test_directory("a.mkv") ]
     
     c = Capture.new
     assert_equal 0, c.merge(output, input)
@@ -40,7 +39,7 @@ class TestCapture < Test::Unit::TestCase
   def test_block_merge
     output = file_name("c-from-one.mkv")
     File.delete(output) if File.exists?(output)
-    input = [ file_name("a.mkv") ]
+    input = [ copy_baseline_file_to_test_directory("a.mkv") ]
     
     amount_done = 0.0
     c = Capture.new
@@ -59,8 +58,7 @@ class TestCapture < Test::Unit::TestCase
     baseline = file_name(File.join("baseline", o))
     output = file_name(o)
     File.delete(output) if File.exists?(output)
-    input = file_name(i)
-    FileUtils.cp(file_name(File.join("baseline", i)), input)
+    input = copy_baseline_file_to_test_directory(i)
     
     c = Capture.new
     c.total_amount = 1.0
