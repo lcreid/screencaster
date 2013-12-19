@@ -72,21 +72,23 @@ task :install => LINUX_FILES do
   system "gem install screencaster-gtk --pre"
 end
 
-CLEAN.include("screencaster.deb", 
-  GEM, 
-  "bin/screencaster", 
-  "test/c.mkv",
+CLEAN.include("test/c.mkv",
   "test/test-final-encode.mp4",
   "test/c-from-one.mkv",
-  "test/c-from-two.mkv")
-CLOBBER.include(DEBIAN_FILES)
+  "test/c-from-two.mkv",
+  "screencaster.1.gz")
+CLOBBER.include(DEBIAN_FILES, 
+  "screencaster.deb", 
+  GEM, 
+  "bin/screencaster",
+  DEBIAN_FILES)
 
-DEBIAN_FILES.each do |f|
-  file f => File.basename(f) do |target|
-    mkdir_p File.dirname(target.name)
-    cp target.prerequisites.first, target.name
-  end
-end
+# DEBIAN_FILES.each do |f|
+  # file f => File.basename(f) do |target|
+    # mkdir_p File.dirname(target.name)
+    # cp target.prerequisites.first, target.name
+  # end
+# end
 
 file "bin/screencaster" => FileList.new("bin/screencaster.rb") do |f|
   cp f.name + ".rb", f.name
@@ -94,11 +96,14 @@ file "bin/screencaster" => FileList.new("bin/screencaster.rb") do |f|
 end
 
 rule '.gz' do |r|
-  system "gzip --best --to-stdout #{r.name.ext} >#{r.name}"
+  system "gzip --best --to-stdout #{File.basename(r.name.ext)} >#{r.name}"
 end
 
 rule "" do |r|
-  puts r.name
+  file r.name => File.basename(r.name) do |f|
+    mkdir_p File.dirname(f.name)
+    cp File.basename(f.name), f.name
+  end if r.is_a?(Rake::FileTask)
 end
 
 ##################################

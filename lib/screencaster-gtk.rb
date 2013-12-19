@@ -72,18 +72,29 @@ class ScreencasterGtk
    
     control_bar = Gtk::HBox.new(false, ScreencasterGtk::DEFAULT_SPACE)
     
-    @select_button = add_button("Select Window", control_bar) { self.select }
-    @record_pause_button = add_button(RECORD_IMAGE, control_bar) { self.record_pause }
-    @stop_button = add_button(STOP_IMAGE, control_bar) { self.stop_recording }
-    @cancel_button = add_button(CANCEL_IMAGE, control_bar) { self.stop_encoding }
+    @select_button = add_button("Select Window", 
+      control_bar, 
+      "Select a window from which to record video") { self.select }
+    @record_pause_button = add_button(RECORD_IMAGE, 
+      control_bar,
+      "Record") { self.record_pause }
+    @stop_button = add_button(STOP_IMAGE, 
+      control_bar,
+      "Stop recording and save video") { self.stop_recording }
+    @cancel_button = add_button(CANCEL_IMAGE, 
+      control_bar,
+      "Cancel saving") { self.stop_encoding }
     if File.executable? SOUND_SETTINGS
       # There appears to be no stock icon for someting like a volume control.
       #@sound_settings_button.image = AUDIO_VOLUME_MEDIUM
-      @sound_settings_button = add_button("Sound", control_bar, true) {
+      @sound_settings_button = add_button("Sound", 
+        control_bar, 
+        "Show the sound input/output controls", 
+        true) {
         Thread.new { `#{SOUND_SETTINGS} sound` }
       }
     end
-    add_button(QUIT_IMAGE, control_bar, true) { self.quit }
+    add_button(QUIT_IMAGE, control_bar, "Quit the program", true) { self.quit }
     
     columns = Gtk::HBox.new(false, ScreencasterGtk::DEFAULT_SPACE)
     @progress_bar = Gtk::ProgressBar.new
@@ -193,7 +204,7 @@ class ScreencasterGtk
     @@logger.debug "Selecting Window"
     @capture_window = Capture.new
     @capture_window.get_window_to_capture
-    @record_pause_button.sensitive = true
+    record_pause_button_set_record(true)
   end
   
   protected
@@ -337,47 +348,56 @@ message about the same condition.
   
   def recording
     self.status_icon.stock = Gtk::Stock::MEDIA_PAUSE
-    @record_pause_button.image = PAUSE_IMAGE
+    record_pause_button_set_pause
     @select.sensitive = @select_button.sensitive = false
-    @record_pause_button.sensitive = true
 #    @pause.sensitive = @pause_button.sensitive = true
     @stop.sensitive = @stop_button.sensitive = true
-    @record.sensitive = false
     @cancel_button.sensitive = false
   end
   
   def not_recording
     self.status_icon.stock = Gtk::Stock::MEDIA_RECORD
-    @record_pause_button.image = RECORD_IMAGE
+    record_pause_button_set_record
     @select.sensitive = @select_button.sensitive = true
 #    @pause.sensitive = @pause_button.sensitive = false
     @stop.sensitive = @stop_button.sensitive = false
-    @record.sensitive = @record_pause_button.sensitive = ! @capture_window.nil?
     @cancel_button.sensitive = false
   end
   
   def paused
     self.status_icon.stock = Gtk::Stock::MEDIA_RECORD
-    @record_pause_button.image = RECORD_IMAGE
-    @record_pause_button.sensitive = true
+    record_pause_button_set_record
     @select.sensitive = @select_button.sensitive = false
 #    @pause.sensitive = @pause_button.sensitive = false
     @stop.sensitive = @stop_button.sensitive = true
-    @record.sensitive = ! @capture_window.nil?
     @cancel_button.sensitive = true
   end
   
   def encoding
     self.status_icon.stock = Gtk::Stock::MEDIA_STOP
-    @record_pause_button.image = RECORD_IMAGE
+    record_pause_button_set_record(false)
 #    @pause.sensitive = @pause_button.sensitive = false
     @stop.sensitive = @stop_button.sensitive = false
-    @record.sensitive = @record_pause_button.sensitive = false
     @cancel_button.sensitive = true
   end
   
   def not_encoding
     not_recording
+  end
+  
+  def record_pause_button_set_pause
+    @record_pause_button.image = PAUSE_IMAGE
+    @record_pause_button.tooltip_text = "Pause"
+    @record_pause_button.sensitive = true
+    @record.sensitive = false
+    @pause.sensitive = true
+  end
+  
+  def record_pause_button_set_record(sensitivity = ! @capture_window.nil?)
+    @record_pause_button.image = RECORD_IMAGE
+    @record_pause_button.tooltip_text = "Record"
+    @record.sensitive = @record_pause_button.sensitive = sensitivity
+    @pause.sensitive = @capture_window.nil? ? false: ! sensitivity
   end
   
   def show_all
@@ -544,10 +564,11 @@ screencaster [OPTION] ...
   
   # Helper functions
   private
-  def add_button(label, box, sensitive = false, &callback)
+  def add_button(label, box, tooltip, sensitive = false, &callback)
     b = Gtk::Button.new
     b.image = label if label.is_a? Gtk::Image
     b.label = label if label.is_a? String
+    b.tooltip_text = tooltip
     b.sensitive = sensitive
     b.signal_connect("clicked") { callback.call }
     box.pack_start(b, true, false)
