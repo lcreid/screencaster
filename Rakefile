@@ -59,7 +59,7 @@ end
 desc "Build the .deb file"
 task :debian => "screencaster.deb"
 
-file "screencaster.deb" => :release
+#file "screencaster.deb" => :release # This revs the gem too soon, before it's been tested.
 file "screencaster.deb" => FileList.new("debian/DEBIAN/*", DEBIAN_FILES) do |t|
   rm Dir.glob("debian/DEBIAN/*~")
   system "fakeroot dpkg-deb --build debian"
