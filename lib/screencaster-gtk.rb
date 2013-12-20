@@ -608,9 +608,15 @@ screencaster [OPTION] ...
     about.version = VERSION
     about.website = HOMEPAGE
     about.authors = AUTHORS
-    about.license = LICENSE
     about.copyright = COPYRIGHT
     
+    begin
+      about.license = IO.read(File.join(File.dirname(__FILE__), "../MPL2.0"))
+    rescue SystemCallError
+      @@logger.warn("Try 'gem uninstall screencaster-gtk; gem install screencaster-gtk' (#{$!})")
+      about.license = LICENSE
+    end
+
     #about.show
     about.run
     about.destroy

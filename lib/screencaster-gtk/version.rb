@@ -8,6 +8,6 @@ class ScreencasterGtk
   AUTHORS = ["Larry Reid"]
   EMAIL = 'larry.reid@jadesystems.ca'
   HOMEPAGE = 'http://github.org/lcreid/screencaster'
-  LICENSE = 'MPL2.0'
+  LICENSE = 'http://www.mozilla.org/MPL/2.0/index.txt'
   COPYRIGHT = 'Copyright (c) Jade Systems Inc. 2013, 2014'
 end
