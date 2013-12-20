@@ -6,7 +6,7 @@
 class ScreencasterGtk
   VERSION = '0.0.7.alpha1'
   AUTHORS = ["Larry Reid"]
-  EMAIL = 'larry.reid@jadesystems.ca'
+  EMAIL = 'screencaster@jadesystems.ca'
   HOMEPAGE = 'http://github.org/lcreid/screencaster'
   LICENSE = 'http://www.mozilla.org/MPL/2.0/index.txt'
   COPYRIGHT = 'Copyright (c) Jade Systems Inc. 2013, 2014'
