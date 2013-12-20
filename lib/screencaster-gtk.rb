@@ -1,9 +1,15 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+# Copyright (c) Jade Systems Inc. 2013, 2014
+
 require 'gtk2'
 require 'logger'
 require 'fileutils'
 require 'getoptlong'
 require "screencaster-gtk/capture"
 require "screencaster-gtk/savefile"
+require "screencaster-gtk/version"
 
 ##########################
 
@@ -94,6 +100,7 @@ class ScreencasterGtk
         Thread.new { `#{SOUND_SETTINGS} sound` }
       }
     end
+    add_button("About", control_bar, "", true) { about }
     add_button(QUIT_IMAGE, control_bar, "Quit the program", true) { self.quit }
     
     columns = Gtk::HBox.new(false, ScreencasterGtk::DEFAULT_SPACE)
@@ -594,6 +601,19 @@ screencaster [OPTION] ...
     
     d.run
     d.destroy
+  end
+  
+  def about
+    about = Gtk::AboutDialog.new
+    about.version = VERSION
+    about.website = HOMEPAGE
+    about.authors = AUTHORS
+    about.license = LICENSE
+    about.copyright = COPYRIGHT
+    
+    #about.show
+    about.run
+    about.destroy
   end
 end
 
