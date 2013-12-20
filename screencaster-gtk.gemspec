@@ -18,7 +18,9 @@ Gem::Specification.new do |s|
     "lib/screencaster-gtk/savefile.rb", 
     "lib/screencaster-gtk/capture.rb", 
     "lib/screencaster-gtk/progresstracker.rb",
-    "lib/screencaster-gtk/version.rb"
+    "lib/screencaster-gtk/version.rb",
+    "MPL2.0",
+    "README.md"
     ]
   s.test_files = Dir.glob('test/*.rb')
   s.homepage    = ScreencasterGtk::HOMEPAGE
