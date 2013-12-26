@@ -455,68 +455,22 @@ message about the same condition.
   end
   
   # Process command line arguments, set up the log file, and set up hot keys.
-  #
-  # * If there's another instance running for the user and the --pause or --start 
-  #   flags are present, send the USR1 signal to the running instance and exit.
-  # * Don't run the program if there's another instance running for the user.
-  # * If there's no other instance running for the user, and the --pause or --start 
-  #   flags are not present, start normally.
   # *   The default hot key is Ctrl+Alt+S.
   def set_up
-    
-    output_file = "/home/reid/test-key.log"
-    
-    @@logger.debug("pid_file is #{PIDFILE}")
-    
-    if File.exists? PIDFILE
-      begin
-        f = File.new(PIDFILE)
-        @@logger.debug("Opened PIDFILE")
-        existing_pid = f.gets
-        existing_pid = existing_pid.to_i
-        f.close
-        @@logger.debug("existing_pid = #{existing_pid.to_s}")
-      rescue StandardError
-        @@logger.error("File to read #{PIDFILE}")
-        exit 1
-      end
-    else
-      existing_pid = nil
-    end
-    
     opts = GetoptLong.new(
-      [ '--help', '-h', GetoptLong::NO_ARGUMENT ],
-      [ '--pause', GetoptLong::NO_ARGUMENT ],
-      [ '--start', GetoptLong::NO_ARGUMENT ]
+      [ '--help', '-h', GetoptLong::NO_ARGUMENT ]
     )
     
     opts.each do |opt, arg|
       case opt
-        when '--help'
+      when '--help'
           puts <<-EOF
 screencaster [OPTION] ... 
 
 -h, --help:
    show help
-
--s, -p, --start, --pause:
-  Pause a running capture, or restart a paused capture
           EOF
           exit 0
-        when '--pause', '--start'
-          if existing_pid then
-            @@logger.debug("Got a pause for PID #{existing_pid}")
-            begin
-              Process.kill "USR1", existing_pid
-              exit 0
-            rescue SystemCallError
-              @@logger.info("Got a pause but PID #{existing_pid} didn't exist")
-              exit 1
-            end
-          else
-            @@logger.info("Got a pause but no PID")
-            exit 1
-          end 
       end
     end
     
@@ -546,25 +500,7 @@ screencaster [OPTION] ...
     Gtk::Window.default_icon_name = "screencaster"
     GLib::setenv("PULSE_PROP_media.role", "video")
 
-    ###### Set up keybindings ######
-    
-    command = "command_1"
-    wm = "/apps/metacity"
-    keybinding_commands = "#{wm}/keybinding_commands/#{command}"
-    global_keybindings = "#{wm}/global_keybindings/run_#{command}"
-      
-    @chain = Signal.trap("EXIT") { 
-      @@logger.debug "In ScreencasterGtk exit handler @chain: #{@chain}"
-      `gconftool-2 --unset #{keybinding_commands}`
-      `gconftool-2 --unset #{global_keybindings}`
-      @@logger.debug "About to call next trap with @chain: #{@chain}"
-      @chain.call unless @chain.nil?
-    }
-    @@logger.debug "ScreencasterGtk after setting @chain: #{@chain}"
-
-    pause_command = "dbus-send --dest=#{@dbus_app.service_name} --type=method_call #{@dbus_app.object_name} #{@dbus_app.interface_name}.pause_record"
-    `gconftool-2 --set #{keybinding_commands} --type string "#{pause_command}"`
-    `gconftool-2 --set #{global_keybindings} --type string "<Control><Alt>S"`
+    set_up_keybindings
 
     $logger = @@logger # TODO: Fix logging
   end
@@ -621,6 +557,35 @@ screencaster [OPTION] ...
     #about.show
     about.run
     about.destroy
+  end
+  
+  ###### Set up keybindings ######
+  #require 'gconf2'
+  
+  def set_up_keybindings
+    command = "command_1"
+    wm = "/apps/metacity"
+    keybinding_commands = "#{wm}/keybinding_commands/#{command}"
+    global_keybindings = "#{wm}/global_keybindings/run_#{command}"
+    
+    client = GConf::Client.new
+      
+    @chain = Signal.trap("EXIT") { 
+      @@logger.debug "In ScreencasterGtk exit handler @chain: #{@chain}"
+      `gconftool-2 --unset #{keybinding_commands}`
+      `gconftool-2 --unset #{global_keybindings}`
+      # client[keybinding_commands] = nil
+      # client[global_keybindings] = nil
+      @@logger.debug "About to call next trap with @chain: #{@chain}"
+      @chain.call unless @chain.nil?
+    }
+    @@logger.debug "ScreencasterGtk after setting @chain: #{@chain}"
+
+    pause_command = "dbus-send --dest=#{@dbus_app.service_name} --type=method_call #{@dbus_app.object_name} #{@dbus_app.interface_name}.pause_record"
+    `gconftool-2 --set #{keybinding_commands} --type string "#{pause_command}"`
+    `gconftool-2 --set #{global_keybindings} --type string "<Control><Alt>S"`
+    # client.unset(keybinding_commands) = pause_command
+    # client.unset(global_keybindings) = "<Control><Alt>S"
   end
 end
 
