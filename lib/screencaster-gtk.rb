@@ -9,6 +9,7 @@ require 'fileutils'
 require 'getoptlong'
 require "screencaster-gtk/capture"
 require "screencaster-gtk/savefile"
+require "screencaster-gtk/dbus_app.rb"
 require "screencaster-gtk/version"
 
 ##########################
@@ -43,8 +44,8 @@ class ScreencasterGtk
   QUIT_IMAGE = Gtk::Image.new(Gtk::Stock::QUIT, Gtk::IconSize::SMALL_TOOLBAR)
 
   public
-    def self.logger
-  @@logger
+  def self.logger
+    @@logger
   end
   
   def self.logger=(log_file)
@@ -53,7 +54,7 @@ class ScreencasterGtk
       
 
   def initialize
-    #### Create Main Window
+    ###### Create Main Window ######
     
     @@logger.info "Started"
     
@@ -117,9 +118,9 @@ class ScreencasterGtk
     
     @window.add(the_box)
 
-    ##### Done Creating Main Window
+    ###### Done Creating Main Window ######
     
-    #### Pop up menu on right click
+    ###### Pop up menu on right click ######
     group = Gtk::AccelGroup.new
     
     @select = Gtk::ImageMenuItem.new("Select Window")
@@ -165,14 +166,14 @@ class ScreencasterGtk
     
     @menu.show_all
 
-    #### Done Menus
+    ###### Done Menus ######
     
-    #### Attach accelerators to window
+    ###### Attach accelerators to window ######
     #root = Gdk::Window.default_root_window
     @window.add_accel_group(group)
   end
   
-  #### Status Icon
+  ###### Status Icon ######
   def status_icon
     return @status_icon unless @status_icon.nil?
     
@@ -189,7 +190,7 @@ class ScreencasterGtk
     @status_icon
   end
   
-  #### Done Status Icon
+  ###### Done Status Icon ######
   
   def quit
     if @capture_window.nil? ||
@@ -333,25 +334,24 @@ message about the same condition.
     end
   end
   
+  public
   def toggle_recording
     @@logger.debug "Toggle recording"
     return if @capture_window.nil?
     case @capture_window.state
     when :recording
       pause
-    when :paused
+    when :paused, :stopped
       record
     when :encoding
       stop_encoding
-    when :stopped
-      # Do nothing
     else
       @@logger.error "#{__FILE__} #{__LINE__}: Can't happen (state #{@capture_window.state})."
     end
   end
   
-  ##### Methods to set sensitivity of controls
-  
+  ###### Methods to set sensitivity of controls ######
+  protected
   def recording
     self.status_icon.stock = Gtk::Stock::MEDIA_PAUSE
     record_pause_button_set_pause
@@ -520,12 +520,24 @@ screencaster [OPTION] ...
       end
     end
     
-    # TODO: Check for running process and if not, ignore PIDFILE.
-    unless existing_pid.nil?
-      error_dialog_tell_about_log("Can't run two instances at once.")
-      exit 1 
-    end
+    ###### If already running, bring to front ######
     
+    @dbus_app = DBusApp.new("ca.jadesystems.screencaster", 
+      "/ca/jadesystems/screencaster", 
+      "ca.jadesystems.screencaster",
+      self,
+      @window)
+    
+    if @dbus_app.application_exists?
+      @@logger.debug("Already running. Bringing window to front")
+      @dbus_app.bring_to_front
+      exit 0
+    else # get ready to receive DBus messages
+      @@logger.debug("Own the DBus service. Prep it")
+      @dbus_app.glibize
+      @dbus_app.object
+    end
+
     # Add application properties for PulseAudio
     # See: http://www.freedesktop.org/wiki/Software/PulseAudio/Documentation/Developer/Clients/ApplicationProperties/
     # Unfortunately, this doesn't seem to help
@@ -534,37 +546,26 @@ screencaster [OPTION] ...
     Gtk::Window.default_icon_name = "screencaster"
     GLib::setenv("PULSE_PROP_media.role", "video")
 
+    ###### Set up keybindings ######
+    
+    command = "command_1"
+    wm = "/apps/metacity"
+    keybinding_commands = "#{wm}/keybinding_commands/#{command}"
+    global_keybindings = "#{wm}/global_keybindings/run_#{command}"
+      
     @chain = Signal.trap("EXIT") { 
       @@logger.debug "In ScreencasterGtk exit handler @chain: #{@chain}"
-      @@logger.debug("Exiting")
-      @@logger.debug("unlinking") if File.file?(PIDFILE)
-      File.unlink(PIDFILE) if File.file?(PIDFILE)
-      `gconftool-2 --unset /apps/metacity/keybinding_commands/screencaster_pause`
-      `gconftool-2 --unset /apps/metacity/global_keybindings/run_screencaster_pause`
+      `gconftool-2 --unset #{keybinding_commands}`
+      `gconftool-2 --unset #{global_keybindings}`
       @@logger.debug "About to call next trap with @chain: #{@chain}"
       @chain.call unless @chain.nil?
     }
-    @@logger.debug "ScreencasterGtk.whatever @chain: #{@chain}"
+    @@logger.debug "ScreencasterGtk after setting @chain: #{@chain}"
 
-    `gconftool-2 --set /apps/metacity/keybinding_commands/screencaster_pause --type string "screencaster --pause"`
-    `gconftool-2 --set /apps/metacity/global_keybindings/run_screencaster_pause --type string "<Control><Alt>S"`
+    pause_command = "dbus-send --dest=#{@dbus_app.service_name} --type=method_call #{@dbus_app.object_name} #{@dbus_app.interface_name}.pause_record"
+    `gconftool-2 --set #{keybinding_commands} --type string "#{pause_command}"`
+    `gconftool-2 --set #{global_keybindings} --type string "<Control><Alt>S"`
 
-    begin
-      FileUtils.mkpath(File.dirname(PIDFILE))
-      f = File.new(PIDFILE, "w")
-      f.puts(Process.pid.to_s)
-      f.close
-      @@logger.debug("Wrote PID #{Process.pid}")
-    rescue StandardError
-      @@logger.error("Failed to write #{PIDFILE}")
-      exit 1
-    end
-    
-    Signal.trap("USR1") { 
-      @@logger.debug("Pause/Resume") 
-      self.toggle_recording
-    }
-    
     $logger = @@logger # TODO: Fix logging
   end
   
