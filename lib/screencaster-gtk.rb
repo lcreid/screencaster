@@ -568,7 +568,7 @@ screencaster [OPTION] ...
     keybinding_commands = "#{wm}/keybinding_commands/#{command}"
     global_keybindings = "#{wm}/global_keybindings/run_#{command}"
     
-    client = GConf::Client.new
+    #client = GConf::Client.new
       
     @chain = Signal.trap("EXIT") { 
       @@logger.debug "In ScreencasterGtk exit handler @chain: #{@chain}"
