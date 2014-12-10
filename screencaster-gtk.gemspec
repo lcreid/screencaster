@@ -14,12 +14,12 @@ Gem::Specification.new do |s|
   s.authors     = ScreencasterGtk::AUTHORS
   s.email       = ScreencasterGtk::EMAIL
   s.files       = [
-    "lib/screencaster-gtk/capture.rb", 
+    "lib/screencaster-gtk/capture.rb",
     "lib/screencaster-gtk/dbus_app.rb",
     "lib/screencaster-gtk/progresstracker.rb",
-    "lib/screencaster-gtk.rb", 
-    "lib/screencaster-gtk/savefile.rb", 
-    "lib/screencaster-gtk/screencaster_dbus_object.rb", 
+    "lib/screencaster-gtk.rb",
+    "lib/screencaster-gtk/savefile.rb",
+    "lib/screencaster-gtk/screencaster_dbus_object.rb",
     "lib/screencaster-gtk/version.rb",
     "MPL2.0",
     "README.md"
@@ -35,7 +35,6 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency 'gtk2', '~> 2.0', '>= 2.0.2'
   s.add_runtime_dependency 'ruby-dbus', '~> 0.9', '>= 0.9.2'
   s.requirements << "libav-tools"
-  s.requirements << "libavcodec-extra-53"
   s.requirements << "wmctl"
   s.requirements << "mkvtoolnix"
   s.requirements << "ruby1.9.1-dev"

@@ -50,7 +50,7 @@ screencaster: ${GEM_SRC_FILES}
 	cp bin/screencaster.rb $@
 	chmod a+x $@
 
-screencaster-gtk.gemspec: ${GEM_SRC_FILES} 
+screencaster-gtk.gemspec: ${GEM_SRC_FILES}
 	#-rm screencaster-gtk-*.gem
 	gem build screencaster-gtk.gemspec
 
@@ -64,7 +64,7 @@ ${INSTALLED_CONFIG_FILES} \
 ${INSTALLED_MENU_FILE} \
 ${ICON_BITMAPS}
 
-uninstall: 
+uninstall:
 	-rm ${INSTALLED_MANPAGES} \
 		${INSTALLED_CONFIG_FILES} \
 		${INSTALLED_MENU_FILE} \
@@ -92,7 +92,7 @@ debian: perms screencaster.deb
 perms:
 	chmod a+x debian/DEBIAN/postinst debian/DEBIAN/prerm
 
-screencaster.deb: ${SOURCES} debian/DEBIAN/* 
+screencaster.deb: ${SOURCES} debian/DEBIAN/*
 	make DESTDIR=debian install
 	-rm debian/DEBIAN/*~
 	fakeroot dpkg-deb --build debian
@@ -135,10 +135,11 @@ ${man1dir} \
 ${docdir} \
 ${LOGROTATE_DIR} \
 ${MENU_DIR} \
-${iconrootdir}
+${iconrootdir} \
+${tmpdir}
 
-${bindir} ${INIT_DIR} ${man1dir} ${docdir} ${LOGROTATE_DIR} ${MENU_DIR} ${iconrootdir}:
-	mkdir -p $@ 
+${bindir} ${INIT_DIR} ${man1dir} ${docdir} ${LOGROTATE_DIR} ${MENU_DIR} ${iconrootdir} ${tmpdir}:
+	mkdir -p $@
 
 # % : %.rb
 	# cp $< $@
@@ -158,5 +159,3 @@ ${iconrootdir}/22/screencaster.png: screencaster.svg
 
 ${iconrootdir}/16/screencaster.png: screencaster.svg
 	rsvg-convert -w 16 -h 16 $? -o $@
-
-

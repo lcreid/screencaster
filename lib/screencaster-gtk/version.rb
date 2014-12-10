@@ -4,7 +4,7 @@
 # Copyright (c) Jade Systems Inc. 2013, 2014
 
 class ScreencasterGtk
-  VERSION = '0.0.8.alpha1'
+  VERSION = '0.1.0'
   AUTHORS = ["Larry Reid"]
   EMAIL = 'screencaster@jadesystems.ca'
   HOMEPAGE = 'http://github.org/lcreid/screencaster'
