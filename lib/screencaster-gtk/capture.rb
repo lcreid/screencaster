@@ -76,7 +76,7 @@ class Capture
   end
 
   def self.format_input_files_for_mkvmerge(files)
-    files.drop(1).inject("\"#{files.first}\"") {|a, b| "#{a} + \"#{b}\"" }
+    files.drop(1).inject("'#{files.first}'") {|a, b| "#{a} + '#{b}'" }
   end
 
   def video_segments_size
@@ -280,7 +280,7 @@ class Capture
   end
 
   def record_command_line(output_file)
-    audio_options="-f alsa -ac 1 -ab #{@audio_sample_frequency} -i #{@audio_input} -acodec #{@acodec} -strict experimental"
+    audio_options="-f alsa -ac 1 -ab #{@audio_sample_frequency} -i #{@audio_input} -acodec #{@acodec}"
     "avconv \
       -f x11grab \
       -show_region 1 \
@@ -300,7 +300,7 @@ class Capture
       "cp -v #{input_files[0]} #{output_file}"
       #cmd_line = "sleep 5"
     else
-      "mkvmerge -v -o #{output_file} #{Capture.format_input_files_for_mkvmerge(input_files)}"
+      "mkvmerge -v -o '#{output_file}' #{Capture.format_input_files_for_mkvmerge(input_files)}"
     end
   end
 
